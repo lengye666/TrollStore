@@ -1270,7 +1270,7 @@ int installTrollStore(NSString* pathToTar)
 	NSString* tmpPackagePath2 = [tmpPath stringByAppendingPathComponent:@"Package"];
 	if(![[NSFileManager defaultManager] createDirectoryAtPath:tmpPackagePath2 withIntermediateDirectories:YES attributes:nil error:nil]) return -1;
 	
-	int untarRet = untarTarGz(pathToTar, tmpPackagePath2);
+	int untarRet = extract(pathToTar, tmpPackagePath2);
 	if(untarRet != 0) return untarRet;
 	
 	NSString* tmpTrollStorePath2 = [tmpPackagePath2 stringByAppendingPathComponent:@"TrollStore.app"];
