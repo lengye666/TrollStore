@@ -1,21 +1,17 @@
 //
-//  TSIPAInfo.h
+//  TSAppInfo.h
 //  IPAInfo
 //
 //  Created by Lars Fröder on 22.10.22.
 //
 
 #import <Foundation/Foundation.h>
-#import <archive.h>
-#import <archive_entry.h>
 @import UIKit;
 
 @interface TSAppInfo : NSObject
 {
 	NSString* _path;
 	BOOL _isArchive;
-	struct archive* _archive;
-	
 	NSString* _cachedAppBundleName;
 	NSString* _cachedRegistrationState;
 	NSDictionary* _cachedInfoDictionary;
@@ -49,7 +45,6 @@
 
 - (NSAttributedString*)detailedInfoTitle;
 - (NSAttributedString*)detailedInfoDescription;
-//- (UIImage*)image;
 - (BOOL)isDebuggable;
 - (void)log;
 
