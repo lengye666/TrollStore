@@ -17,7 +17,7 @@ jobs:
     # 安装基本依赖
     - name: Install dependencies
       run: |
-        brew install ldid make openssl@3
+        brew install ldid make openssl@3 libarchive pkg-config
         
     # 设置 Theos 开发环境
     - name: Setup Theos
@@ -37,6 +37,9 @@ jobs:
         echo "THEOS_DEVICE_IP=127.0.0.1" >> $GITHUB_ENV
         echo "THEOS_PLATFORM=ios" >> $GITHUB_ENV
         echo "SDKVERSION=16.5" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "CFLAGS=-I/opt/homebrew/include -I$GITHUB_WORKSPACE/theos/include -Os -flto" >> $GITHUB_ENV
+        echo "LDFLAGS=-L/opt/homebrew/lib -L$GITHUB_WORKSPACE/theos/lib -larchive -flto -dead_strip" >> $GITHUB_ENV
         
     # 构建 TrollStore
     - name: Build TrollStore
