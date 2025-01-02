@@ -1,0 +1,90 @@
+name: Build TrollStore
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+        fetch-depth: 0
+    
+    - name: Initialize submodules
+      run: |
+        git submodule update --init --recursive
+        
+    - name: Setup Dependencies
+      run: |
+        brew install ldid make dpkg xz libarchive openssl pkg-config
+        
+    - name: Setup Theos
+      run: |
+        export THEOS=${{ github.workspace }}/theos
+        git clone --recursive https://github.com/theos/theos.git $THEOS
+        mkdir -p $THEOS/sdks
+        curl -LO https://github.com/theos/sdks/archive/master.zip
+        unzip master.zip -d $THEOS/sdks
+        mv $THEOS/sdks/sdks-master/*.sdk $THEOS/sdks/
+        rm -rf master.zip $THEOS/sdks/sdks-master
+        curl -LO https://github.com/theos/lib/archive/master.zip
+        unzip master.zip
+        cp -R lib-master/* ./
+        rm -rf master.zip lib-master
+        
+    - name: Setup Build Environment
+      run: |
+        export THEOS=${{ github.workspace }}/theos
+        export PATH="/opt/homebrew/bin:$PATH"
+        export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I${{ github.workspace }}/ChOma/src -Wno-error=unused-variable"
+        export LDFLAGS="-L/opt/homebrew/lib -L$THEOS/lib"
+        echo "THEOS=$THEOS" >> $GITHUB_ENV
+        echo "PATH=$PATH" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "CFLAGS=$CFLAGS" >> $GITHUB_ENV
+        echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
+        
+    - name: Build fastPathSign
+      run: |
+        cd Exploits/fastPathSign
+        make
+        chmod +x fastPathSign
+        cd ../..
+        
+    - name: Build TrollStore
+      run: |
+        cd TrollStore
+        make package THEOS_PACKAGE_SCHEME=rootless  
+        
+    - name: Build TrollHelper
+      run: |
+        cd TrollHelper
+        make package THEOS_PACKAGE_SCHEME=rootless
+        
+    - name: Build PersistenceHelper
+      run: |
+        cd PersistenceHelper
+        make package THEOS_PACKAGE_SCHEME=rootless
+        
+    - name: Create TrollStore Package
+      run: |
+        mkdir -p package/TrollStore.app
+        cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
+        cp -r TrollHelper/.theos/obj/debug/* package/TrollStore.app/
+        cp -r PersistenceHelper/.theos/obj/debug/* package/TrollStore.app/
+        cd package
+        tar -czf TrollStore.tar TrollStore.app
+        
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TrollStore
+        path: package/TrollStore.tar
+        retention-days: 5
