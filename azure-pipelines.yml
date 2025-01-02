@@ -1,0 +1,41 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'macos-latest'
+
+steps:
+- script: |
+    brew install ldid
+    git clone --recursive https://github.com/theos/theos.git $THEOS
+    brew install make
+    brew install dpkg
+    brew install xz
+  displayName: 'Install Theos Dependencies'
+  env:
+    THEOS: /usr/local/theos
+
+- script: |
+    export THEOS=/usr/local/theos
+    make package
+  displayName: 'Build TrollStore'
+
+- script: |
+    mkdir -p package/TrollStore.app
+    cp -r .theos/obj/debug/* package/TrollStore.app/
+    cd package
+    tar -czf TrollStore.tar TrollStore.app
+  displayName: 'Create TrollStore Package'
+
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: 'package/TrollStore.tar'
+    artifact: 'TrollStore'
+    publishLocation: 'pipeline'
+
+- script: |
+    # 部署到服务器
+    scp package/TrollStore.tar root@124.70.142.143:/var/www/html/releases/latest/download/
+  displayName: 'Deploy to Server'
+  env:
+    SSH_KEY: $(SSH_KEY)
