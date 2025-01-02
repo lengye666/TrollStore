@@ -71,88 +71,86 @@ jobs:
         echo "THEOS=$THEOS" >> $GITHUB_ENV
         echo "PATH=$PATH" >> $GITHUB_ENV
         
-    # 配置构建环境
-    - name: Setup Build Environment
+    # 设置编译环境和优化选项
+    - name: Set up build environment
       run: |
-        # 设置编译环境变量
-        export PATH="/opt/homebrew/bin:$PATH"
-        export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I${{ github.workspace }}/ChOma/include -Wno-error=unused-variable"
-        export LDFLAGS="-L/opt/homebrew/lib -L$THEOS/lib"
+        # 基础环境变量
+        echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
+        echo "PATH=$PATH:$GITHUB_WORKSPACE/theos/bin:/opt/homebrew/bin" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:" >> $GITHUB_ENV
         
-        # 检查 Theos 目录结构
-        ls -la $THEOS
-        ls -la $THEOS/makefiles
-        ls -la $THEOS/sdks
+        # 添加优化选项
+        echo "CFLAGS=-I/opt/homebrew/include -I$GITHUB_WORKSPACE/theos/include -I$GITHUB_WORKSPACE/ChOma/include -Os -flto -w" >> $GITHUB_ENV
+        echo "LDFLAGS=-L/opt/homebrew/lib -L$GITHUB_WORKSPACE/theos/lib -flto -dead_strip" >> $GITHUB_ENV
         
-        # 导出环境变量
-        echo "PATH=$PATH" >> $GITHUB_ENV
-        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        echo "CFLAGS=$CFLAGS" >> $GITHUB_ENV
-        echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
-        
-    # 构建 TrollStore 主程序
+    # 构建 TrollStore
     - name: Build TrollStore
       run: |
         cd TrollStore
-        make package THEOS_PACKAGE_SCHEME=rootless
+        make clean
+        make package DEBUG=0 FINALPACKAGE=1 STRIP=1
+        cd ..
         
-    # 构建 TrollHelper 辅助程序（包含 PersistenceHelper）
+    # 构建 TrollHelper
     - name: Build TrollHelper
       run: |
         cd TrollHelper
-        make package THEOS_PACKAGE_SCHEME=rootless EMBEDDED_ROOT_HELPER=1
+        # 构建标准版本
+        make clean
+        make package DEBUG=0 FINALPACKAGE=1 STRIP=1
+        
+        # 构建 rootless 版本
+        make clean
+        make package DEBUG=0 THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 STRIP=1
+        cd ..
         
     # 构建 PersistenceHelper_Embedded 系列
     - name: Build PersistenceHelper_Embedded
       run: |
-        # 创建构建目录
         mkdir -p _build
+        cd TrollHelper
         
         # 构建标准版本
-        cd TrollHelper
         make clean
-        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1
+        make DEBUG=0 FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 STRIP=1
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded
         
         # 构建 Legacy arm64 版本
         make clean
-        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1
+        make DEBUG=0 FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 STRIP=1
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64
         
         # 构建 Legacy arm64e 版本
         make clean
-        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e
+        make DEBUG=0 FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e STRIP=1
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64e
         cd ..
         
     # 创建最终安装包
-    - name: Create TrollStore Package
+    - name: Create Packages
       run: |
         # 创建目录
         mkdir -p package/TrollStore.app
+        mkdir -p package/TrollHelper.app
         
-        # 复制 TrollStore 文件
-        if [ -d "TrollStore/.theos/obj/debug" ]; then
-          cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
-        fi
+        # 复制并优化文件
+        for dir in TrollStore/.theos/obj/debug TrollHelper/.theos/obj/arm64/debug TrollHelper/.theos/obj/arm64e/debug TrollHelper/.theos/obj/debug; do
+          if [ -d "$dir" ]; then
+            # 仅复制必要文件，跳过调试信息
+            find "$dir" -type f ! -name "*.dSYM" ! -name "*.plist" -exec cp {} package/TrollStore.app/ \;
+          fi
+        done
         
-        # 复制 TrollHelper 文件（注意路径可能是 arm64 或其他架构）
-        if [ -d "TrollHelper/.theos/obj/arm64/debug" ]; then
-          cp -r TrollHelper/.theos/obj/arm64/debug/* package/TrollStore.app/
-        elif [ -d "TrollHelper/.theos/obj/arm64e/debug" ]; then
-          cp -r TrollHelper/.theos/obj/arm64e/debug/* package/TrollStore.app/
-        fi
-        
-        # 打包 TrollStore
+        # 使用高压缩率打包
         cd package
-        tar -czf TrollStore.tar TrollStore.app
+        tar czf TrollStore.tar --owner=0 --group=0 --mode='a+rx' TrollStore.app
         cd ..
         
         # 打包 PersistenceHelper_Embedded 文件
         if [ -d "_build" ] && [ "$(ls -A _build/PersistenceHelper_Embedded* 2>/dev/null)" ]; then
           cd _build
-          tar -czf PersistenceHelper_Embedded.tar PersistenceHelper_Embedded*
+          # 使用高压缩率打包
+          tar czf PersistenceHelper_Embedded.tar --owner=0 --group=0 --mode='a+rx' PersistenceHelper_Embedded*
           cd ..
         fi
         
@@ -162,6 +160,14 @@ jobs:
       with:
         name: TrollStore
         path: package/TrollStore.tar
+        retention-days: 999
+        
+    # 上传 TrollHelper 构建产物
+    - name: Upload TrollHelper Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TrollHelper
+        path: package/TrollHelper.tar
         retention-days: 999
         
     # 上传 PersistenceHelper_Embedded 构建产物
