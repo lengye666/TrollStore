@@ -246,7 +246,7 @@ jobs:
         
         # Version 1 - PersistenceHelper_Embedded
         make clean
-        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:14.5:14.0
+        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:14.5:14.0 ARCHS="arm64 arm64e"
         mkdir -p ../packages/helpers
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded
         
@@ -264,7 +264,6 @@ jobs:
         
         # 编译主程序
         cd TrollStore
-        sed -i.bak 's/TrollStore_LIBRARIES = archive/TrollStore_LIBRARIES = /' Makefile
         make package FINALPACKAGE=1
         cd ..
         
