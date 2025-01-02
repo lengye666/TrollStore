@@ -13,13 +13,8 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        submodules: true
         fetch-depth: 0
     
-    - name: Initialize submodules
-      run: |
-        git submodule update --init --recursive
-        
     - name: Setup Dependencies
       run: |
         brew install ldid make dpkg xz libarchive openssl pkg-config
