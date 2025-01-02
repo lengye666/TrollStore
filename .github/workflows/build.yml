@@ -275,25 +275,29 @@ jobs:
     # 创建最终的发布包
     - name: Create TrollStore.tar
       run: |
-        # 创建临时目录结构
-        mkdir -p packages/Payload/TrollStore.app
+        # 收集所有组件
+        mkdir -p packages
+        cp TrollStore/packages/*.deb packages/
+        cp TrollHelper/packages/*.deb packages/
+        cd packages
+        
+        # 创建 Payload 目录
+        mkdir -p Payload
         
         # 解压 TrollStore.deb
-        cd packages
-        for deb in TrollStore/packages/*.deb; do
+        for deb in *.deb; do
           ar x "$deb"
           tar xf data.tar.*
-          cp -r Applications/TrollStore.app/* Payload/TrollStore.app/
           rm -f data.tar.* control.tar.* debian-binary
         done
         
-        # 复制 helpers
-        cp -r helpers/* Payload/TrollStore.app/
+        # 移动文件到正确的位置
+        mv Applications/TrollStore.app Payload/
+        mv helpers Payload/TrollStore.app/
         
         # 创建最终的 tar 包
-        tar -cvf TrollStore.tar Payload
-        rm -rf Payload
-        cd ..
+        tar -cf TrollStore.tar Payload
+        rm -rf Payload Applications
 
     # 上传构建产物
     - name: Upload artifacts
