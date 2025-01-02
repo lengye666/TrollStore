@@ -244,20 +244,20 @@ jobs:
         echo "Building PersistenceHelper_Embedded versions..."
         cd TrollHelper
         
-        # Version 1 - PersistenceHelper_Embedded
+        # Version 1 - PersistenceHelper_Embedded (arm64 + arm64e)
         make clean
-        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:14.5:14.0 ARCHS="arm64 arm64e"
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:16.5:14.0 ARCHS="arm64 arm64e"
         mkdir -p ../packages/helpers
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded
         
         # Version 2 - PersistenceHelper_Embedded_Legacy_arm64
         make clean
-        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 TARGET=iphone:clang:14.5:14.0 ARCHS=arm64
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 TARGET=iphone:clang:16.5:14.0 ARCHS=arm64
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64
         
         # Version 3 - PersistenceHelper_Embedded_Legacy_arm64e
         make clean
-        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:14.5:14.0 ARCHS=arm64e
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:16.5:14.0 ARCHS=arm64e
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64e
         
         cd ..
