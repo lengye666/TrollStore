@@ -25,7 +25,7 @@ copy_data(struct archive *ar, struct archive *aw)
   }
 }
 
-int untarTarGz(NSString* fileToExtract, NSString* extractionPath)
+int extract(NSString* fileToExtract, NSString* extractionPath)
 {
     struct archive *a;
     struct archive *ext;
