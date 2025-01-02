@@ -14,7 +14,6 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        submodules: 'recursive'
     
     - name: Setup Dependencies
       run: |
@@ -30,7 +29,6 @@ jobs:
     - name: Setup Theos
       run: |
         export THEOS=${{ github.workspace }}/theos
-        git clone --recursive https://github.com/theos/theos.git $THEOS
         mkdir -p $THEOS/sdks
         curl -LO https://github.com/theos/sdks/archive/master.zip
         unzip master.zip -d $THEOS/sdks
