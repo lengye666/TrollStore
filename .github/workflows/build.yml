@@ -96,13 +96,51 @@ jobs:
     - name: Build TrollStore
       run: |
         cd TrollStore
-        make package THEOS_PACKAGE_SCHEME=rootless
+        # 检查环境
+        echo "检查构建环境..."
+        xcrun --sdk iphoneos --show-sdk-path
+        echo "THEOS_PLATFORM_SDK_ROOT=$THEOS_PLATFORM_SDK_ROOT"
+        echo "THEOS_PLATFORM_SDK_PATH=$THEOS_PLATFORM_SDK_PATH"
         
-    # 构建 TrollHelper 辅助程序（包含 PersistenceHelper）
+        # 确保 fastPathSign 存在并可执行
+        if [ ! -f "../Exploits/fastPathSign/fastPathSign" ]; then
+          echo "错误: fastPathSign 工具不存在"
+          exit 1
+        fi
+        chmod +x ../Exploits/fastPathSign/fastPathSign
+        
+        # 构建主程序
+        make clean
+        make package FINALPACKAGE=1 STRIP=1 DEBUG=0
+        
+        # 验证构建产物
+        if [ ! -d ".theos/obj/debug" ]; then
+          echo "错误: 构建失败，没有生成目标文件"
+          exit 1
+        fi
+        
+        cd ..
+        
+    # 构建 TrollHelper 辅助程序
     - name: Build TrollHelper
       run: |
         cd TrollHelper
-        make package THEOS_PACKAGE_SCHEME=rootless EMBEDDED_ROOT_HELPER=1
+        # 检查环境和依赖
+        echo "检查 TrollHelper 构建环境..."
+        ls -la ../Exploits/fastPathSign/
+        ls -la entitlements.plist
+        
+        # 构建
+        make clean
+        make package FINALPACKAGE=1 STRIP=1 DEBUG=0 EMBEDDED_ROOT_HELPER=1
+        
+        # 验证构建产物
+        if [ ! -d ".theos/obj/TrollStorePersistenceHelper.app" ]; then
+          echo "错误: TrollHelper 构建失败"
+          exit 1
+        fi
+        
+        cd ..
         
     # 构建 PersistenceHelper_Embedded 系列
     - name: Build PersistenceHelper_Embedded
@@ -132,22 +170,29 @@ jobs:
       run: |
         # 创建目录
         mkdir -p package/TrollStore.app
+        mkdir -p package/TrollHelper.app
         
         # 复制 TrollStore 文件
         if [ -d "TrollStore/.theos/obj/debug" ]; then
           cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
         fi
         
-        # 复制 TrollHelper 文件（注意路径可能是 arm64 或其他架构）
-        if [ -d "TrollHelper/.theos/obj/arm64/debug" ]; then
-          cp -r TrollHelper/.theos/obj/arm64/debug/* package/TrollStore.app/
+        # 复制 TrollHelper 文件
+        if [ -d "TrollHelper/.theos/obj/debug" ]; then
+          cp -r TrollHelper/.theos/obj/debug/* package/TrollHelper.app/
+        elif [ -d "TrollHelper/.theos/obj/arm64/debug" ]; then
+          cp -r TrollHelper/.theos/obj/arm64/debug/* package/TrollHelper.app/
         elif [ -d "TrollHelper/.theos/obj/arm64e/debug" ]; then
-          cp -r TrollHelper/.theos/obj/arm64e/debug/* package/TrollStore.app/
+          cp -r TrollHelper/.theos/obj/arm64e/debug/* package/TrollHelper.app/
         fi
+        
+        # 设置文件权限
+        chmod -R +x package/TrollStore.app
+        chmod -R +x package/TrollHelper.app
         
         # 打包 TrollStore
         cd package
-        tar -czf TrollStore.tar TrollStore.app
+        tar -czf TrollStore.tar TrollStore.app TrollHelper.app
         cd ..
         
         # 打包 PersistenceHelper_Embedded 文件
@@ -168,6 +213,14 @@ jobs:
       with:
         name: TrollStore
         path: package/TrollStore.tar
+        retention-days: 999
+        
+    # 上传 TrollHelper 构建产物
+    - name: Upload TrollHelper Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TrollHelper
+        path: package/TrollHelper.app
         retention-days: 999
         
     # 上传 PersistenceHelper_Embedded 标准版本
