@@ -1,3 +1,4 @@
+
 # TrollStore 构建工作流配置
 
 name: Build TrollStore
@@ -23,119 +24,141 @@ jobs:
     # 安装依赖工具
     - name: Setup Dependencies
       run: |
-        brew install ldid make dpkg xz libarchive openssl pkg-config gnu-tar
+        brew install ldid make dpkg xz libarchive openssl pkg-config
         
     # 设置 ChOma 签名工具
     - name: Setup ChOma
       run: |
-        git clone https://github.com/opa334/ChOma
-        cd ChOma
-        make
-        cd ..
+        git clone https://github.com/opa334/ChOma.git
+        cd ChOma/src
+        # 修复文件名大小写问题
+        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
+        sed -i.bak 's/struct fat_header/struct FAT_header/g' FAT.h
+        sed -i.bak 's/typedef struct fat_header FAT_header/typedef struct FAT_header FAT_header/g' FAT.h
+        sed -i.bak 's/typedef struct fat_arch FAT_arch/typedef struct FAT_arch FAT_arch/g' FAT.h
+        mv Fat.h FAT.h
+        cd ../..
         
-    # 设置 Theos
+    # 构建 fastPathSign 签名工具
+    - name: Build fastPathSign
+      run: |
+        cd Exploits/fastPathSign
+        cp ../../ChOma/src/*.h src/
+        # 修复文件引用和函数调用
+        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
+        sed -i.bak 's/FAT \*fat/struct FAT \*fat/g' src/main.m
+        sed -i.bak 's/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize, memory_stream_get_size(macho->stream))/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize)/' src/coretrust_bug.c
+        make
+        chmod +x fastPathSign
+        cd ../..
+        
+    # 设置 Theos 开发环境
     - name: Setup Theos
       run: |
-        git clone --recursive https://github.com/theos/theos
-        curl -LO https://github.com/theos/sdks/archive/refs/heads/master.zip
-        unzip master.zip -d .
-        mv sdks-master/* theos/sdks/
-        rm -rf sdks-master master.zip
+        # 设置 Theos 环境变量
+        export THEOS=${{ github.workspace }}/theos
         
-    # 设置编译环境和优化选项
-    - name: Set up build environment
+        # 克隆 Theos 框架
+        git clone --recursive https://github.com/theos/theos.git $THEOS
+        
+        # 安装 iOS SDK
+        mkdir -p $THEOS/sdks
+        curl -LO https://github.com/theos/sdks/archive/master.zip
+        unzip master.zip -d $THEOS/sdks
+        mv $THEOS/sdks/sdks-master/*.sdk $THEOS/sdks/
+        rm -rf master.zip $THEOS/sdks/sdks-master
+        
+        # 设置环境变量
+        echo "THEOS=$THEOS" >> $GITHUB_ENV
+        echo "PATH=$PATH" >> $GITHUB_ENV
+        
+    # 配置构建环境
+    - name: Setup Build Environment
       run: |
-        # 基础环境变量
-        echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
-        echo "PATH=/opt/homebrew/opt/gnu-tar/libexec/gnubin:$PATH:$GITHUB_WORKSPACE/theos/bin:/opt/homebrew/bin" >> $GITHUB_ENV
-        echo "PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig:" >> $GITHUB_ENV
+        # 设置编译环境变量
+        export PATH="/opt/homebrew/bin:$PATH"
+        export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I${{ github.workspace }}/ChOma/include -Wno-error=unused-variable"
+        export LDFLAGS="-L/opt/homebrew/lib -L$THEOS/lib"
         
-        # 添加优化选项
-        echo "CFLAGS=-I/opt/homebrew/include -I$GITHUB_WORKSPACE/theos/include -I$GITHUB_WORKSPACE/ChOma/include -Os -flto -w" >> $GITHUB_ENV
-        echo "LDFLAGS=-L/opt/homebrew/lib -L$GITHUB_WORKSPACE/theos/lib -flto -dead_strip" >> $GITHUB_ENV
+        # 检查 Theos 目录结构
+        ls -la $THEOS
+        ls -la $THEOS/makefiles
+        ls -la $THEOS/sdks
         
-    # 构建 TrollStore
+        # 导出环境变量
+        echo "PATH=$PATH" >> $GITHUB_ENV
+        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
+        echo "CFLAGS=$CFLAGS" >> $GITHUB_ENV
+        echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
+        
+    # 构建 TrollStore 主程序
     - name: Build TrollStore
       run: |
         cd TrollStore
-        make clean
-        make package DEBUG=0 FINALPACKAGE=1 STRIP=1
-        cd ..
+        make package THEOS_PACKAGE_SCHEME=rootless
         
-    # 构建 TrollHelper
+    # 构建 TrollHelper 辅助程序（包含 PersistenceHelper）
     - name: Build TrollHelper
       run: |
         cd TrollHelper
-        # 构建标准版本
-        make clean
-        make package DEBUG=0 FINALPACKAGE=1 STRIP=1
-        
-        # 构建 rootless 版本
-        make clean
-        make package DEBUG=0 THEOS_PACKAGE_SCHEME=rootless FINALPACKAGE=1 STRIP=1
-        cd ..
+        make package THEOS_PACKAGE_SCHEME=rootless EMBEDDED_ROOT_HELPER=1
         
     # 构建 PersistenceHelper_Embedded 系列
     - name: Build PersistenceHelper_Embedded
       run: |
+        # 创建构建目录
         mkdir -p _build
-        cd TrollHelper
         
         # 构建标准版本
+        cd TrollHelper
         make clean
-        make DEBUG=0 FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 STRIP=1
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded
-        cd ../_build
-        chmod +x PersistenceHelper_Embedded
-        tar -czf PersistenceHelper_Embedded.tar PersistenceHelper_Embedded
-        cd ../TrollHelper
         
         # 构建 Legacy arm64 版本
         make clean
-        make DEBUG=0 FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 STRIP=1
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64
-        cd ../_build
-        chmod +x PersistenceHelper_Embedded_Legacy_arm64
-        tar -czf PersistenceHelper_Embedded_Legacy_arm64.tar PersistenceHelper_Embedded_Legacy_arm64
-        cd ../TrollHelper
         
         # 构建 Legacy arm64e 版本
         make clean
-        make DEBUG=0 FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e STRIP=1
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e
         cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64e
-        cd ../_build
-        chmod +x PersistenceHelper_Embedded_Legacy_arm64e
-        tar -czf PersistenceHelper_Embedded_Legacy_arm64e.tar PersistenceHelper_Embedded_Legacy_arm64e
         cd ..
         
     # 创建最终安装包
-    - name: Create Packages
+    - name: Create TrollStore Package
       run: |
         # 创建目录
         mkdir -p package/TrollStore.app
-        mkdir -p package/TrollHelper.app
         
-        # 复制并优化文件
-        for dir in TrollStore/.theos/obj/debug TrollHelper/.theos/obj/arm64/debug TrollHelper/.theos/obj/arm64e/debug TrollHelper/.theos/obj/debug; do
-          if [ -d "$dir" ]; then
-            # 仅复制必要文件，跳过调试信息
-            find "$dir" -type f ! -name "*.dSYM" ! -name "*.plist" -exec cp {} package/TrollStore.app/ \;
-          fi
-        done
+        # 复制 TrollStore 文件
+        if [ -d "TrollStore/.theos/obj/debug" ]; then
+          cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
+        fi
         
-        # 设置文件权限
-        chmod -R +x package/TrollStore.app
+        # 复制 TrollHelper 文件（注意路径可能是 arm64 或其他架构）
+        if [ -d "TrollHelper/.theos/obj/arm64/debug" ]; then
+          cp -r TrollHelper/.theos/obj/arm64/debug/* package/TrollStore.app/
+        elif [ -d "TrollHelper/.theos/obj/arm64e/debug" ]; then
+          cp -r TrollHelper/.theos/obj/arm64e/debug/* package/TrollStore.app/
+        fi
         
-        # 打包
+        # 打包 TrollStore
         cd package
         tar -czf TrollStore.tar TrollStore.app
         cd ..
         
         # 打包 PersistenceHelper_Embedded 文件
-        if [ -d "_build" ] && [ "$(ls -A _build/PersistenceHelper_Embedded* 2>/dev/null)" ]; then
+        if [ -d "_build" ]; then
           cd _build
-          # 使用高压缩率打包
-          tar -czf PersistenceHelper_Embedded.tar PersistenceHelper_Embedded*
+          # 分别打包每个版本
+          for file in PersistenceHelper_Embedded*; do
+            if [ -f "$file" ]; then
+              tar -czf "${file}.tar" "$file"
+            fi
+          done
           cd ..
         fi
         
@@ -147,15 +170,7 @@ jobs:
         path: package/TrollStore.tar
         retention-days: 999
         
-    # 上传 TrollHelper 构建产物
-    - name: Upload TrollHelper Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: TrollHelper
-        path: package/TrollHelper.tar
-        retention-days: 999
-        
-    # 上传 PersistenceHelper_Embedded 构建产物
+    # 上传 PersistenceHelper_Embedded 标准版本
     - name: Upload PersistenceHelper_Embedded Standard
       uses: actions/upload-artifact@v4
       with:
@@ -163,6 +178,7 @@ jobs:
         path: _build/PersistenceHelper_Embedded.tar
         retention-days: 999
         
+    # 上传 PersistenceHelper_Embedded Legacy arm64 版本
     - name: Upload PersistenceHelper_Embedded Legacy arm64
       uses: actions/upload-artifact@v4
       with:
@@ -170,6 +186,7 @@ jobs:
         path: _build/PersistenceHelper_Embedded_Legacy_arm64.tar
         retention-days: 999
         
+    # 上传 PersistenceHelper_Embedded Legacy arm64e 版本
     - name: Upload PersistenceHelper_Embedded Legacy arm64e
       uses: actions/upload-artifact@v4
       with:
