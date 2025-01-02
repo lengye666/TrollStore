@@ -263,27 +263,52 @@ jobs:
         cd TrollHelper
         
         # Version 1 - PersistenceHelper_Embedded
+        echo "Building Version 1 - PersistenceHelper_Embedded (arm64)..."
         make clean
-        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 make
+        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 ARCHS=arm64 make
         mkdir -p ../packages/helpers
-        cp -v .theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded
+        if [ -f ".theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper" ]; then
+            cp -v .theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded
+        else
+            echo "Error: PersistenceHelper_Embedded not found"
+            find .theos/obj -type f -name "TrollStorePersistenceHelper"
+        fi
         
         # Version 2 - Legacy arm64
+        echo "Building Version 2 - PersistenceHelper_Embedded_Legacy_arm64..."
         make clean
         FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 ARCHS=arm64 make
-        cp -v .theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64
+        if [ -f ".theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper" ]; then
+            cp -v .theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64
+        else
+            echo "Error: PersistenceHelper_Embedded_Legacy_arm64 not found"
+            find .theos/obj -type f -name "TrollStorePersistenceHelper"
+        fi
         
-        # Version 3 - Legacy arm64e
+        # Version 3 - arm64e
+        echo "Building Version 3 - PersistenceHelper_Embedded_arm64e..."
         make clean
-        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 ARCHS=arm64e make
-        cp -v .theos/obj/arm64e/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64e
+        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 ARCHS=arm64e TARGET=iphone:clang:16.5:14.0 make
+        echo "Checking arm64e build output..."
+        find .theos/obj -type f -name "TrollStorePersistenceHelper"
+        if [ -f ".theos/obj/arm64e/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper" ]; then
+            cp -v .theos/obj/arm64e/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64e
+        else
+            echo "Warning: arm64e build not found, trying alternate path..."
+            if [ -f ".theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper" ]; then
+                cp -v .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64e
+            else
+                echo "Error: Could not find arm64e build"
+                ls -R .theos/obj
+            fi
+        fi
         
         cd ..
         
-        echo "Build complete. Listing helpers:"
+        echo "Build complete. Listing helpers directory:"
         ls -la packages/helpers/
         
-    # 创建最终的发布包
+        # 创建最终的发布包
     - name: Create TrollStore.tar
       run: |
         echo "Current directory: $(pwd)"
