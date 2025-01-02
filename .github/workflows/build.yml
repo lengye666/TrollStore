@@ -1,4 +1,3 @@
-
 # TrollStore 构建工作流配置
 
 name: Build TrollStore
@@ -121,11 +120,29 @@ jobs:
         SDKVERSION=16.5 make package FINALPACKAGE=1 STRIP=1 DEBUG=0
         
         # 验证构建产物
-        if [ ! -d ".theos/obj/debug" ]; then
-          echo "错误: 构建失败，没有生成目标文件"
+        echo "检查构建产物..."
+        ls -la .theos/obj/
+        ls -la packages/
+        
+        if [ ! -f "packages/com.opa334.trollstore_2.1_iphoneos-arm.deb" ]; then
+          echo "错误: 未找到 TrollStore deb 包"
           exit 1
         fi
-        ls -la .theos/obj/debug
+        
+        # 解压 deb 包
+        echo "解压 deb 包..."
+        mkdir -p ../package/TrollStore.app
+        dpkg-deb -x packages/com.opa334.trollstore_2.1_iphoneos-arm.deb ../package/
+        
+        if [ ! -d "../package/Applications/TrollStore.app" ]; then
+          echo "错误: 解压后未找到 TrollStore.app"
+          exit 1
+        fi
+        
+        # 移动到正确位置
+        mv ../package/Applications/TrollStore.app/* ../package/TrollStore.app/
+        rm -rf ../package/Applications
+        
         cd ..
         
     # 构建 TrollHelper 辅助程序
@@ -139,13 +156,31 @@ jobs:
         
         # 构建
         make clean
-        make package FINALPACKAGE=1 STRIP=1 DEBUG=0 EMBEDDED_ROOT_HELPER=1
+        SDKVERSION=16.5 make package FINALPACKAGE=1 STRIP=1 DEBUG=0 EMBEDDED_ROOT_HELPER=1
         
         # 验证构建产物
-        if [ ! -d ".theos/obj/TrollStorePersistenceHelper.app" ]; then
-          echo "错误: TrollHelper 构建失败"
+        echo "检查 TrollHelper 构建产物..."
+        ls -la .theos/obj/
+        ls -la packages/
+        
+        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
+          echo "错误: 未找到 TrollHelper deb 包"
           exit 1
         fi
+        
+        # 解压 deb 包
+        echo "解压 TrollHelper deb 包..."
+        mkdir -p ../package/TrollHelper.app
+        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb ../package/
+        
+        if [ ! -d "../package/Applications/TrollStorePersistenceHelper.app" ]; then
+          echo "错误: 解压后未找到 TrollStorePersistenceHelper.app"
+          exit 1
+        fi
+        
+        # 移动到正确位置
+        mv ../package/Applications/TrollStorePersistenceHelper.app/* ../package/TrollHelper.app/
+        rm -rf ../package/Applications
         
         cd ..
         
@@ -154,22 +189,72 @@ jobs:
       run: |
         # 创建构建目录
         mkdir -p _build
+        cd TrollHelper
         
         # 构建标准版本
-        cd TrollHelper
+        echo "构建标准版本..."
         make clean
-        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1
-        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded
+        SDKVERSION=16.5 make package FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 STRIP=1
+        
+        # 验证和处理标准版本
+        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
+          echo "错误: 未找到标准版本 deb 包"
+          exit 1
+        fi
+        
+        # 解压并复制标准版本
+        mkdir -p temp
+        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb temp/
+        cp temp/Applications/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded
+        rm -rf temp
         
         # 构建 Legacy arm64 版本
+        echo "构建 Legacy arm64 版本..."
         make clean
-        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1
-        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64
+        SDKVERSION=16.5 make package FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 STRIP=1
+        
+        # 验证和处理 Legacy arm64 版本
+        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
+          echo "错误: 未找到 Legacy arm64 版本 deb 包"
+          exit 1
+        fi
+        
+        # 解压并复制 Legacy arm64 版本
+        mkdir -p temp
+        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb temp/
+        cp temp/Applications/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64
+        rm -rf temp
         
         # 构建 Legacy arm64e 版本
+        echo "构建 Legacy arm64e 版本..."
         make clean
-        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e
-        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64e
+        SDKVERSION=16.5 make package FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e STRIP=1
+        
+        # 验证和处理 Legacy arm64e 版本
+        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
+          echo "错误: 未找到 Legacy arm64e 版本 deb 包"
+          exit 1
+        fi
+        
+        # 解压并复制 Legacy arm64e 版本
+        mkdir -p temp
+        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb temp/
+        cp temp/Applications/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64e
+        rm -rf temp
+        cd ..
+        
+        # 设置权限并打包
+        cd _build
+        echo "设置权限和打包..."
+        chmod +x PersistenceHelper_Embedded*
+        
+        # 分别打包每个版本
+        for file in PersistenceHelper_Embedded*; do
+          if [ -f "$file" ]; then
+            echo "打包 $file..."
+            tar -czf "${file}.tar" "$file"
+          fi
+        done
         cd ..
         
     # 创建最终安装包
