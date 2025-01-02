@@ -19,89 +19,20 @@ jobs:
       run: |
         brew install ldid make dpkg xz libarchive openssl pkg-config
         
-    - name: Create Header Files
+    # 设置 ChOma 签名工具
+    - name: Setup ChOma
       run: |
-        cat > Exploits/fastPathSign/src/FAT.h << 'EOL'
-        #ifndef FAT_H
-        #define FAT_H
+        git clone https://github.com/opa334/ChOma.git
+        cd ChOma/src
+        # 修复文件名大小写问题
+        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
+        sed -i.bak 's/struct fat_header/struct FAT_header/g' FAT.h
+        sed -i.bak 's/typedef struct fat_header FAT_header/typedef struct FAT_header FAT_header/g' FAT.h
+        sed -i.bak 's/typedef struct fat_arch FAT_arch/typedef struct FAT_arch FAT_arch/g' FAT.h
+        mv Fat.h FAT.h
+        cd ../..
         
-        #include <stdint.h>
-        
-        #define FAT_MAGIC 0xcafebabe
-        #define FAT_CIGAM 0xbebafeca
-        #define FAT_MAGIC_64 0xcafebabf
-        #define FAT_CIGAM_64 0xbfbafeca
-        
-        struct fat_header {
-            uint32_t magic;
-            uint32_t nfat_arch;
-        };
-        
-        struct fat_arch {
-            uint32_t cputype;
-            uint32_t cpusubtype;
-            uint32_t offset;
-            uint32_t size;
-            uint32_t align;
-        };
-        
-        struct fat_arch_64 {
-            uint32_t cputype;
-            uint32_t cpusubtype;
-            uint64_t offset;
-            uint64_t size;
-            uint32_t align;
-            uint32_t reserved;
-        };
-        
-        #endif /* FAT_H */
-        EOL
-        
-        cat > Exploits/fastPathSign/src/CSBlob.h << 'EOL'
-        #ifndef CSBLOB_H
-        #define CSBLOB_H
-        
-        #include <stdint.h>
-        
-        typedef uint32_t CS_HashType;
-        typedef uint32_t CS_SuperBlob;
-        
-        #define CSMAGIC_REQUIREMENT            0xfade0c00
-        #define CSMAGIC_REQUIREMENTS          0xfade0c01
-        #define CSMAGIC_CODEDIRECTORY         0xfade0c02
-        #define CSMAGIC_EMBEDDED_SIGNATURE    0xfade0cc0
-        #define CSMAGIC_DETACHED_SIGNATURE    0xfade0cc1
-        #define CSMAGIC_BLOBWRAPPER          0xfade0b01
-        
-        typedef struct {
-            uint32_t magic;
-            uint32_t length;
-        } CS_BlobHeader;
-        
-        typedef struct {
-            uint32_t magic;
-            uint32_t length;
-            uint32_t count;
-            char index[];
-        } CS_SuperBlob_t;
-        
-        typedef struct {
-            uint32_t type;
-            uint32_t offset;
-        } CS_BlobIndex;
-        
-        #endif /* CSBLOB_H */
-        EOL
-        
-    - name: Setup ChOma Headers
-      run: |
-        cd ChOma
-        ls -la
-        pwd
-        mkdir -p include
-        find . -name "*.h" -type f -exec cp {} include/ \;
-        cd ..
-        
+    # 构建 fastPathSign 签名工具
     - name: Build fastPathSign
       run: |
         cd Exploits/fastPathSign
