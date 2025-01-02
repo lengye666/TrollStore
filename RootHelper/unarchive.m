@@ -18,10 +18,11 @@ static int run_command(const char* command, NSArray* args, NSString* workingDir)
     posix_spawn_file_actions_init(&actions);
     
     if (workingDir) {
-        posix_spawn_file_actions_addchdir(&actions, workingDir.UTF8String);
+        posix_spawn_file_actions_addchdir_np(&actions, workingDir.UTF8String);
     }
     
     status = posix_spawn(&pid, command, &actions, NULL, (char* const*)argv, NULL);
+    posix_spawn_file_actions_destroy(&actions);
     free(argv);
     
     if (status == 0) {
