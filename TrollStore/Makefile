@@ -13,7 +13,7 @@ TrollStore_FRAMEWORKS = UIKit CoreGraphics CoreServices CoreTelephony
 TrollStore_PRIVATE_FRAMEWORKS = SpringBoardServices BackBoardServices MobileCoreServices
 TrollStore_LIBRARIES = archive
 TrollStore_CODESIGN_FLAGS = -Sentitlements.plist
-TrollStore_CFLAGS = -fobjc-arc -I/opt/homebrew/include
+TrollStore_CFLAGS = -fobjc-arc -I/opt/homebrew/include -I../Shared
 TrollStore_LDFLAGS = -L/opt/homebrew/lib
 
 include $(THEOS_MAKE_PATH)/application.mk
