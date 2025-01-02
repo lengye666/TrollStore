@@ -73,6 +73,7 @@ jobs:
         cat > TrollStore/TSAppInfo.h << 'EOF'
         #import <Foundation/Foundation.h>
         @import UIKit;
+
         @interface TSAppInfo : NSObject
         {
             NSString* _path;
@@ -85,6 +86,7 @@ jobs:
             UIImage* _cachedPreviewIcon;
             int64_t _cachedSize;
         }
+
         - (instancetype)initWithIPAPath:(NSString*)ipaPath;
         - (instancetype)initWithAppBundlePath:(NSString*)bundlePath;
         - (NSError*)determineAppBundleName;
@@ -106,6 +108,7 @@ jobs:
         - (NSAttributedString*)detailedInfoDescription;
         - (BOOL)isDebuggable;
         - (void)log;
+
         @end
         EOF
         
@@ -227,6 +230,7 @@ jobs:
         
         @end
         EOF
+
     # 构建项目
     - name: Build project
       env:
@@ -236,47 +240,103 @@ jobs:
         export THEOS_DEVICE_IP=127.0.0.1
         export THEOS_PLATFORM=ios
         
-        # 构建 PersistenceHelper_Embedded 的三个版本
-        echo "Building PersistenceHelper_Embedded versions..."
+        # 编译主程序
+        echo "Building TrollStore..."
+        cd TrollStore
+        make clean
+        FINALPACKAGE=1 make package
+        echo "TrollStore build result:"
+        find .theos/obj -type f -name "TrollStore"
+        cd ..
+        
+        # 编译持续性助手
+        echo "Building TrollHelper..."
+        cd TrollHelper
+        make clean
+        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 make package
+        echo "TrollHelper build result:"
+        find .theos/obj -type f -name "TrollStorePersistenceHelper"
+        cd ..
+        
+        # 编译 PersistenceHelper 版本
+        echo "Building PersistenceHelper versions..."
         cd TrollHelper
         
         # Version 1 - PersistenceHelper_Embedded
         make clean
-        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:14.5:14.0 ARCHS="arm64 arm64e"
+        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 make
         mkdir -p ../packages/helpers
-        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded
+        cp -v .theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded
         
-        # Version 2 - PersistenceHelper_Embedded_Legacy_arm64
+        # Version 2 - Legacy arm64
         make clean
-        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 TARGET=iphone:clang:14.5:14.0 ARCHS=arm64
-        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64
+        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 ARCHS=arm64 make
+        cp -v .theos/obj/arm64/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64
         
-        # Version 3 - PersistenceHelper_Embedded_Legacy_arm64e
+        # Version 3 - Legacy arm64e
         make clean
-        SDKVERSION=14.5 make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 TARGET=iphone:clang:14.5:14.0 ARCHS=arm64e
-        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64e
+        FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 ARCHS=arm64e make
+        cp -v .theos/obj/arm64e/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64e
         
         cd ..
         
-        # 编译主程序
-        cd TrollStore
-        make package FINALPACKAGE=1
-        cd ..
-        
-        # 编译持续性助手
-        cd TrollHelper
-        make package FINALPACKAGE=1
-        cd ..
+        echo "Build complete. Listing helpers:"
+        ls -la packages/helpers/
         
     # 创建最终的发布包
     - name: Create TrollStore.tar
       run: |
-        # 收集所有组件
-        mkdir -p packages
-        cp TrollStore/packages/*.deb packages/
-        cp TrollHelper/packages/*.deb packages/
+        echo "Current directory: $(pwd)"
+        echo "Listing TrollStore build directory:"
+        ls -la TrollStore/.theos/obj || echo "TrollStore build directory not found"
+        echo "Listing TrollHelper build directory:"
+        ls -la TrollHelper/.theos/obj || echo "TrollHelper build directory not found"
+        
+        # 创建必要的目录
+        mkdir -p packages/Payload/TrollStore.app
+        mkdir -p packages/Payload/TrollHelper.app
+        
+        # 等待编译完成
+        sleep 5
+        
+        # 查找编译产物
+        echo "Looking for TrollStore.app:"
+        find . -name "TrollStore.app" -type d
+        echo "Looking for TrollStorePersistenceHelper.app:"
+        find . -name "TrollStorePersistenceHelper.app" -type d
+        
+        # 复制编译产物（使用通配符查找）
+        echo "Copying build artifacts..."
+        for tsapp in $(find . -name "TrollStore.app" -type d); do
+          echo "Copying $tsapp to packages/Payload/TrollStore.app/"
+          cp -rv "$tsapp"/* packages/Payload/TrollStore.app/
+        done
+        
+        for thapp in $(find . -name "TrollStorePersistenceHelper.app" -type d); do
+          echo "Copying $thapp to packages/Payload/TrollHelper.app/"
+          cp -rv "$thapp"/* packages/Payload/TrollHelper.app/
+        done
+        
+        # 复制 helpers
+        echo "Copying helpers..."
+        mkdir -p packages/Payload/TrollStore.app/helpers
+        if [ -d "packages/helpers" ]; then
+          cp -rv packages/helpers/* packages/Payload/TrollStore.app/helpers/
+        else
+          echo "Warning: helpers directory not found"
+          find . -name "PersistenceHelper_Embedded*"
+        fi
+        
+        # 显示最终的目录结构
+        echo "Final Payload structure:"
+        ls -R packages/Payload
+        
+        # 创建最终的 tar 包
         cd packages
-        tar -cvf TrollStore.tar *.deb helpers/*
+        echo "Creating tar file..."
+        tar -cvf TrollStore.tar Payload
+        echo "Cleaning up..."
+        rm -rf Payload
     # 上传构建产物
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
