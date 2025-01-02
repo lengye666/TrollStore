@@ -103,21 +103,43 @@ jobs:
         cd TrollHelper
         make package THEOS_PACKAGE_SCHEME=rootless EMBEDDED_ROOT_HELPER=1
         
+    # 构建 PersistenceHelper_Embedded 系列
+    - name: Build PersistenceHelper_Embedded
+      run: |
+        # 创建构建目录
+        mkdir -p _build
+        
+        # 构建标准版本
+        cd TrollHelper
+        make clean
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded
+        
+        # 构建 Legacy arm64 版本
+        make clean
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64
+        
+        # 构建 Legacy arm64e 版本
+        make clean
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64e
+        cd ..
+        
     # 创建最终安装包
     - name: Create TrollStore Package
       run: |
-        # 创建 TrollStore 包
         mkdir -p package/TrollStore.app
         cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
+        cp -r TrollHelper/.theos/obj/debug/* package/TrollStore.app/
         cd package
         tar -czf TrollStore.tar TrollStore.app
         cd ..
         
-        # 创建 TrollHelper 包
-        mkdir -p package/TrollHelper.app
-        cp -r TrollHelper/.theos/obj/debug/* package/TrollHelper.app/
-        cd package
-        tar -czf TrollHelper.tar TrollHelper.app
+        # 打包 PersistenceHelper_Embedded 文件
+        cd _build
+        tar -czf PersistenceHelper_Embedded.tar PersistenceHelper_Embedded*
+        cd ..
         
     # 上传 TrollStore 构建产物
     - name: Upload TrollStore Artifact
@@ -127,10 +149,10 @@ jobs:
         path: package/TrollStore.tar
         retention-days: 999
         
-    # 上传 TrollHelper 构建产物
-    - name: Upload TrollHelper Artifact
+    # 上传 PersistenceHelper_Embedded 构建产物
+    - name: Upload PersistenceHelper_Embedded Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: TrollHelper
-        path: package/TrollHelper.tar
+        name: PersistenceHelper_Embedded
+        path: _build/PersistenceHelper_Embedded.tar
         retention-days: 999
