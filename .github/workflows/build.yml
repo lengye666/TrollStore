@@ -20,11 +20,6 @@ jobs:
         brew install ldid          # 安装签名工具
         brew install make          # 安装构建工具
         brew install openssl@3     # 安装 OpenSSL
-        brew install libarchive    # 安装 libarchive
-        
-        # 设置 libarchive 环境变量
-        echo "CPATH=$(brew --prefix libarchive)/include:$CPATH" >> $GITHUB_ENV
-        echo "LIBRARY_PATH=$(brew --prefix libarchive)/lib:$LIBRARY_PATH" >> $GITHUB_ENV
         
     # 设置 Theos 开发环境
     - name: Setup Theos
