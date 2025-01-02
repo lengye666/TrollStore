@@ -87,4 +87,4 @@ jobs:
       with:
         name: TrollStore
         path: package/TrollStore.tar
-        retention-days: 5
+        retention-days: 999
