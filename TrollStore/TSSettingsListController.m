@@ -41,7 +41,7 @@ extern NSUserDefaults* trollStoreUserDefaults(void);
 		{
 			NSString* ldidPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"ldid"];
 			NSString* ldidVersionPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"ldid.version"];
-			BOOL ldidInstalled = [[NSFileManager defaultManager] fileExistsAtPath:ldidPath];
+			#pragma unused(ldidPath)
 
 			NSString* ldidVersion = nil;
 			NSData* ldidVersionData = [NSData dataWithContentsOfFile:ldidVersionPath];
