@@ -1,193 +1,62 @@
-# TrollStore 构建工作流配置
-
 name: Build TrollStore
 
-# 触发条件：推送到 main 分支或创建 PR 到 main 分支时
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
-    # 使用 macOS 最新版本作为构建环境
     runs-on: macos-latest
     
     steps:
-    # 检出代码
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
     
-    # 安装依赖工具
-    - name: Setup Dependencies
+    # 安装基本依赖
+    - name: Install dependencies
       run: |
-        brew install ldid make dpkg xz libarchive openssl pkg-config
-        
-    # 设置 ChOma 签名工具
-    - name: Setup ChOma
-      run: |
-        git clone https://github.com/opa334/ChOma.git
-        cd ChOma/src
-        # 修复文件名大小写问题
-        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
-        sed -i.bak 's/struct fat_header/struct FAT_header/g' FAT.h
-        sed -i.bak 's/typedef struct fat_header FAT_header/typedef struct FAT_header FAT_header/g' FAT.h
-        sed -i.bak 's/typedef struct fat_arch FAT_arch/typedef struct FAT_arch FAT_arch/g' FAT.h
-        mv Fat.h FAT.h
-        cd ../..
-        
-    # 构建 fastPathSign 签名工具
-    - name: Build fastPathSign
-      run: |
-        cd Exploits/fastPathSign
-        cp ../../ChOma/src/*.h src/
-        # 修复文件引用和函数调用
-        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
-        sed -i.bak 's/FAT \*fat/struct FAT \*fat/g' src/main.m
-        sed -i.bak 's/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize, memory_stream_get_size(macho->stream))/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize)/' src/coretrust_bug.c
-        make
-        chmod +x fastPathSign
-        cd ../..
+        brew install ldid make openssl@3
         
     # 设置 Theos 开发环境
     - name: Setup Theos
       run: |
-        # 设置 Theos 环境变量
-        export THEOS=$GITHUB_WORKSPACE/theos
-        
-        # 克隆 Theos 框架
-        git clone --recursive https://github.com/theos/theos.git $THEOS
-        
-        # 下载特定版本的 SDK
-        mkdir -p $THEOS/sdks
+        git clone --recursive https://github.com/theos/theos.git theos
         curl -LO https://github.com/theos/sdks/archive/master.zip
-        unzip master.zip -d $THEOS/sdks
-        mv $THEOS/sdks/sdks-master/*.sdk $THEOS/sdks/
-        rm -rf master.zip $THEOS/sdks/sdks-master
+        unzip master.zip
+        mkdir -p theos/sdks
+        mv sdks-master/* theos/sdks/
+        rm -rf sdks-master master.zip
         
-        # 设置 SDK 路径
-        LATEST_SDK=$(ls -1 $THEOS/sdks/iPhoneOS*.sdk | sort -V | tail -n 1)
-        echo "THEOS_PLATFORM_SDK_ROOT=$THEOS/sdks" >> $GITHUB_ENV
-        echo "THEOS_PLATFORM_SDK_PATH=$LATEST_SDK" >> $GITHUB_ENV
-        
-        # 设置其他环境变量
-        echo "THEOS=$THEOS" >> $GITHUB_ENV
-        echo "PATH=$THEOS/bin:$PATH" >> $GITHUB_ENV
-        
-    # 配置构建环境
-    - name: Setup Build Environment
+    # 设置环境变量
+    - name: Set environment variables
       run: |
-        # 设置编译环境变量
-        export PATH="/opt/homebrew/bin:$PATH"
-        export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
+        echo "THEOS=$GITHUB_WORKSPACE/theos" >> $GITHUB_ENV
+        echo "PATH=$GITHUB_WORKSPACE/theos/bin:$PATH" >> $GITHUB_ENV
+        echo "THEOS_DEVICE_IP=127.0.0.1" >> $GITHUB_ENV
+        echo "THEOS_PLATFORM=ios" >> $GITHUB_ENV
+        echo "SDKVERSION=16.5" >> $GITHUB_ENV
         
-        # 设置编译标志
-        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I$GITHUB_WORKSPACE/ChOma/include -Os -flto -Wno-unused-variable"
-        export LDFLAGS="-L/opt/homebrew/lib -L$THEOS/lib -flto -dead_strip"
-        
-        # 检查 Theos 设置
-        echo "验证 Theos 环境..."
-        echo "THEOS = $THEOS"
-        echo "THEOS_PLATFORM_SDK_ROOT = $THEOS_PLATFORM_SDK_ROOT"
-        echo "THEOS_PLATFORM_SDK_PATH = $THEOS_PLATFORM_SDK_PATH"
-        ls -la $THEOS/sdks
-        
-        # 导出环境变量
-        echo "PATH=$PATH" >> $GITHUB_ENV
-        echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
-        echo "CFLAGS=$CFLAGS" >> $GITHUB_ENV
-        echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
-        
-    # 构建 TrollStore 主程序
+    # 构建 TrollStore
     - name: Build TrollStore
       run: |
         cd TrollStore
-        # 检查环境
-        echo "检查构建环境..."
-        echo "使用的 SDK 路径: $THEOS_PLATFORM_SDK_PATH"
-        
-        # 确保 fastPathSign 存在并可执行
-        if [ ! -f "../Exploits/fastPathSign/fastPathSign" ]; then
-          echo "错误: fastPathSign 工具不存在"
-          exit 1
-        fi
-        chmod +x ../Exploits/fastPathSign/fastPathSign
-        
-        # 构建主程序
         make clean
         SDKVERSION=16.5 make package FINALPACKAGE=1 STRIP=1 DEBUG=0
-        
-        # 验证构建产物
-        echo "检查构建产物..."
-        ls -la .theos/obj/
-        ls -la packages/
-        
-        if [ ! -f "packages/com.opa334.trollstore_2.1_iphoneos-arm.deb" ]; then
-          echo "错误: 未找到 TrollStore deb 包"
-          exit 1
-        fi
-        
-        # 解压 deb 包
-        echo "解压 deb 包..."
-        mkdir -p ../package/TrollStore.app
-        dpkg-deb -x packages/com.opa334.trollstore_2.1_iphoneos-arm.deb ../package/
-        
-        if [ ! -d "../package/Applications/TrollStore.app" ]; then
-          echo "错误: 解压后未找到 TrollStore.app"
-          exit 1
-        fi
-        
-        # 移动到正确位置
-        mv ../package/Applications/TrollStore.app/* ../package/TrollStore.app/
-        rm -rf ../package/Applications
-        
         cd ..
         
-    # 构建 TrollHelper 辅助程序
+    # 构建 TrollHelper
     - name: Build TrollHelper
       run: |
         cd TrollHelper
-        # 检查环境和依赖
-        echo "检查 TrollHelper 构建环境..."
-        ls -la ../Exploits/fastPathSign/
-        ls -la entitlements.plist
-        
-        # 构建
         make clean
-        SDKVERSION=16.5 make package FINALPACKAGE=1 STRIP=1 DEBUG=0 EMBEDDED_ROOT_HELPER=1
-        
-        # 验证构建产物
-        echo "检查 TrollHelper 构建产物..."
-        ls -la .theos/obj/
-        ls -la packages/
-        
-        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
-          echo "错误: 未找到 TrollHelper deb 包"
-          exit 1
-        fi
-        
-        # 解压 deb 包
-        echo "解压 TrollHelper deb 包..."
-        mkdir -p ../package/TrollHelper.app
-        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb ../package/
-        
-        if [ ! -d "../package/Applications/TrollStorePersistenceHelper.app" ]; then
-          echo "错误: 解压后未找到 TrollStorePersistenceHelper.app"
-          exit 1
-        fi
-        
-        # 移动到正确位置
-        mv ../package/Applications/TrollStorePersistenceHelper.app/* ../package/TrollHelper.app/
-        rm -rf ../package/Applications
-        
+        SDKVERSION=16.5 make package FINALPACKAGE=1 STRIP=1 DEBUG=0
         cd ..
         
     # 构建 PersistenceHelper_Embedded 系列
     - name: Build PersistenceHelper_Embedded
       run: |
-        # 创建构建目录
         mkdir -p _build
         cd TrollHelper
         
@@ -195,146 +64,58 @@ jobs:
         echo "构建标准版本..."
         make clean
         SDKVERSION=16.5 make package FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 STRIP=1
-        
-        # 验证和处理标准版本
-        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
-          echo "错误: 未找到标准版本 deb 包"
-          exit 1
-        fi
-        
-        # 解压并复制标准版本
-        mkdir -p temp
-        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb temp/
-        cp temp/Applications/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded
-        rm -rf temp
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded
         
         # 构建 Legacy arm64 版本
         echo "构建 Legacy arm64 版本..."
         make clean
         SDKVERSION=16.5 make package FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1 STRIP=1
-        
-        # 验证和处理 Legacy arm64 版本
-        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
-          echo "错误: 未找到 Legacy arm64 版本 deb 包"
-          exit 1
-        fi
-        
-        # 解压并复制 Legacy arm64 版本
-        mkdir -p temp
-        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb temp/
-        cp temp/Applications/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64
-        rm -rf temp
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64
         
         # 构建 Legacy arm64e 版本
         echo "构建 Legacy arm64e 版本..."
         make clean
         SDKVERSION=16.5 make package FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e STRIP=1
-        
-        # 验证和处理 Legacy arm64e 版本
-        if [ ! -f "packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb" ]; then
-          echo "错误: 未找到 Legacy arm64e 版本 deb 包"
-          exit 1
-        fi
-        
-        # 解压并复制 Legacy arm64e 版本
-        mkdir -p temp
-        dpkg-deb -x packages/com.opa334.trollstorepersistencehelper_2.1_iphoneos-arm.deb temp/
-        cp temp/Applications/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64e
-        rm -rf temp
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../_build/PersistenceHelper_Embedded_Legacy_arm64e
         cd ..
         
         # 设置权限并打包
         cd _build
-        echo "设置权限和打包..."
         chmod +x PersistenceHelper_Embedded*
-        
-        # 分别打包每个版本
         for file in PersistenceHelper_Embedded*; do
-          if [ -f "$file" ]; then
-            echo "打包 $file..."
-            tar -czf "${file}.tar" "$file"
-          fi
+          tar -czf "${file}.tar" "$file"
         done
         cd ..
         
-    # 创建最终安装包
-    - name: Create TrollStore Package
+    # 创建最终发布包
+    - name: Create release package
       run: |
-        # 创建目录
-        mkdir -p package/TrollStore.app
-        mkdir -p package/TrollHelper.app
+        # 创建临时目录
+        mkdir -p release/Applications
         
-        # 复制 TrollStore 文件
-        if [ -d "TrollStore/.theos/obj/debug" ]; then
-          cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
-        fi
+        # 解压 TrollStore
+        cd TrollStore/packages
+        dpkg-deb -x *.deb ../../release/
+        cd ../..
         
-        # 复制 TrollHelper 文件
-        if [ -d "TrollHelper/.theos/obj/debug" ]; then
-          cp -r TrollHelper/.theos/obj/debug/* package/TrollHelper.app/
-        elif [ -d "TrollHelper/.theos/obj/arm64/debug" ]; then
-          cp -r TrollHelper/.theos/obj/arm64/debug/* package/TrollHelper.app/
-        elif [ -d "TrollHelper/.theos/obj/arm64e/debug" ]; then
-          cp -r TrollHelper/.theos/obj/arm64e/debug/* package/TrollHelper.app/
-        fi
+        # 解压 TrollHelper
+        cd TrollHelper/packages
+        dpkg-deb -x *.deb ../../release/
+        cd ../..
         
-        # 设置文件权限
-        chmod -R +x package/TrollStore.app
-        chmod -R +x package/TrollHelper.app
+        # 复制 PersistenceHelper_Embedded 文件
+        cp _build/PersistenceHelper_Embedded* release/
         
-        # 打包 TrollStore
-        cd package
-        tar -czf TrollStore.tar TrollStore.app TrollHelper.app
+        # 创建最终的 tar 包
+        cd release
+        tar -czf ../TrollStore.tar *
         cd ..
         
-        # 打包 PersistenceHelper_Embedded 文件
-        if [ -d "_build" ]; then
-          cd _build
-          # 分别打包每个版本
-          for file in PersistenceHelper_Embedded*; do
-            if [ -f "$file" ]; then
-              tar -czf "${file}.tar" "$file"
-            fi
-          done
-          cd ..
-        fi
-        
-    # 上传 TrollStore 构建产物
-    - name: Upload TrollStore Artifact
+    # 上传构建产物
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: TrollStore
-        path: package/TrollStore.tar
-        retention-days: 999
-        
-    # 上传 TrollHelper 构建产物
-    - name: Upload TrollHelper Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: TrollHelper
-        path: package/TrollHelper.app
-        retention-days: 999
-        
-    # 上传 PersistenceHelper_Embedded 标准版本
-    - name: Upload PersistenceHelper_Embedded Standard
-      uses: actions/upload-artifact@v4
-      with:
-        name: PersistenceHelper_Embedded
-        path: _build/PersistenceHelper_Embedded.tar
-        retention-days: 999
-        
-    # 上传 PersistenceHelper_Embedded Legacy arm64 版本
-    - name: Upload PersistenceHelper_Embedded Legacy arm64
-      uses: actions/upload-artifact@v4
-      with:
-        name: PersistenceHelper_Embedded_Legacy_arm64
-        path: _build/PersistenceHelper_Embedded_Legacy_arm64.tar
-        retention-days: 999
-        
-    # 上传 PersistenceHelper_Embedded Legacy arm64e 版本
-    - name: Upload PersistenceHelper_Embedded Legacy arm64e
-      uses: actions/upload-artifact@v4
-      with:
-        name: PersistenceHelper_Embedded_Legacy_arm64e
-        path: _build/PersistenceHelper_Embedded_Legacy_arm64e.tar
-        retention-days: 999
+        path: |
+          TrollStore.tar
+          _build/PersistenceHelper_Embedded*.tar
