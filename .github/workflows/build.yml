@@ -240,6 +240,28 @@ jobs:
         export THEOS_DEVICE_IP=127.0.0.1
         export THEOS_PLATFORM=ios
         
+        # 构建 PersistenceHelper_Embedded 的三个版本
+        echo "Building PersistenceHelper_Embedded versions..."
+        cd TrollHelper
+        
+        # Version 1 - PersistenceHelper_Embedded
+        make clean
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1
+        mkdir -p ../packages/helpers
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded
+        
+        # Version 2 - PersistenceHelper_Embedded_Legacy_arm64
+        make clean
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 LEGACY_CT_BUG=1
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64
+        
+        # Version 3 - PersistenceHelper_Embedded_Legacy_arm64e
+        make clean
+        make FINALPACKAGE=1 EMBEDDED_ROOT_HELPER=1 CUSTOM_ARCHS=arm64e
+        cp .theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper ../packages/helpers/PersistenceHelper_Embedded_Legacy_arm64e
+        
+        cd ..
+        
         # 编译主程序
         cd TrollStore
         sed -i.bak 's/TrollStore_LIBRARIES = archive/TrollStore_LIBRARIES = /' Makefile
@@ -254,16 +276,18 @@ jobs:
     # 创建最终的发布包
     - name: Create TrollStore.tar
       run: |
-        # 收集所有组件的 deb 包
+        # 收集所有组件
         mkdir -p packages
         cp TrollStore/packages/*.deb packages/
         cp TrollHelper/packages/*.deb packages/
         cd packages
-        tar -cvf TrollStore.tar *.deb 
+        tar -cvf TrollStore.tar *.deb helpers/*
 
     # 上传构建产物
-    - name: Upload artifact
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: TrollStore
-        path: packages/TrollStore.tar 
+        path: |
+          packages/TrollStore.tar
+          packages/helpers/PersistenceHelper_Embedded*
