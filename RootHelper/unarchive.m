@@ -2,7 +2,7 @@
 #import <spawn.h>
 #import <sys/wait.h>
 
-static int run_command(const char* command, NSArray* args, NSString* workingDir) {
+static int run_command(const char* command, NSArray* args) {
     NSMutableArray* fullArgs = [NSMutableArray arrayWithObject:[NSString stringWithUTF8String:command]];
     [fullArgs addObjectsFromArray:args];
     
@@ -10,19 +10,12 @@ static int run_command(const char* command, NSArray* args, NSString* workingDir)
     for (NSUInteger i = 0; i < fullArgs.count; i++) {
         argv[i] = [fullArgs[i] UTF8String];
     }
-    argv[fullArgs.count] = NULL;
+    argv[fullArgs.count] = NULL;    
     
     pid_t pid;
     int status;
-    posix_spawn_file_actions_t actions;
-    posix_spawn_file_actions_init(&actions);
     
-    if (workingDir) {
-        posix_spawn_file_actions_addchdir_np(&actions, workingDir.UTF8String);
-    }
-    
-    status = posix_spawn(&pid, command, &actions, NULL, (char* const*)argv, NULL);
-    posix_spawn_file_actions_destroy(&actions);
+    status = posix_spawn(&pid, command, NULL, NULL, (char* const*)argv, NULL);
     free(argv);
     
     if (status == 0) {
@@ -53,14 +46,12 @@ int extract(NSString* fileToExtract, NSString* extractionPath)
     if ([extension isEqualToString:@"zip"]) {
         // 使用系统自带的 zip 解压功能
         return run_command("/usr/bin/unzip",
-                         @[@"-o", fileToExtract, @"-d", extractionPath],
-                         nil);
+                         @[@"-o", fileToExtract, @"-d", extractionPath]);
     }
     else if ([extension isEqualToString:@"tar"]) {
         // 使用系统自带的 tar 解压功能
         return run_command("/usr/bin/tar",
-                         @[@"-xf", fileToExtract, @"-C", extractionPath],
-                         nil);
+                         @[@"-xf", fileToExtract, @"-C", extractionPath]);
     }
     else {
         NSLog(@"Unsupported archive format: %@", extension);
