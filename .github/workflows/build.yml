@@ -19,6 +19,13 @@ jobs:
       run: |
         brew install ldid make dpkg xz libarchive openssl pkg-config
         
+    - name: Setup ChOma Headers
+      run: |
+        cd ChOma
+        mkdir -p include
+        cp src/*.h include/
+        cd ..
+        
     - name: Setup Theos
       run: |
         export THEOS=${{ github.workspace }}/theos
@@ -38,7 +45,7 @@ jobs:
         export THEOS=${{ github.workspace }}/theos
         export PATH="/opt/homebrew/bin:$PATH"
         export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
-        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I${{ github.workspace }}/ChOma/src -Wno-error=unused-variable"
+        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I${{ github.workspace }}/ChOma/include -Wno-error=unused-variable"
         export LDFLAGS="-L/opt/homebrew/lib -L$THEOS/lib"
         echo "THEOS=$THEOS" >> $GITHUB_ENV
         echo "PATH=$PATH" >> $GITHUB_ENV
@@ -49,7 +56,11 @@ jobs:
     - name: Build fastPathSign
       run: |
         cd Exploits/fastPathSign
-        make
+        clang -framework Foundation -framework CoreServices -framework Security -fobjc-arc \
+        -I/opt/homebrew/opt/openssl@3/include \
+        -I${{ github.workspace }}/ChOma/include \
+        -L/opt/homebrew/opt/openssl@3/lib -lcrypto \
+        -o fastPathSign src/codesign.m src/main.m src/coretrust_bug.c
         chmod +x fastPathSign
         cd ../..
         
