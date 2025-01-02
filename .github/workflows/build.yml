@@ -129,17 +129,32 @@ jobs:
     # 创建最终安装包
     - name: Create TrollStore Package
       run: |
+        # 创建目录
         mkdir -p package/TrollStore.app
-        cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
-        cp -r TrollHelper/.theos/obj/debug/* package/TrollStore.app/
+        
+        # 复制 TrollStore 文件
+        if [ -d "TrollStore/.theos/obj/debug" ]; then
+          cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
+        fi
+        
+        # 复制 TrollHelper 文件（注意路径可能是 arm64 或其他架构）
+        if [ -d "TrollHelper/.theos/obj/arm64/debug" ]; then
+          cp -r TrollHelper/.theos/obj/arm64/debug/* package/TrollStore.app/
+        elif [ -d "TrollHelper/.theos/obj/arm64e/debug" ]; then
+          cp -r TrollHelper/.theos/obj/arm64e/debug/* package/TrollStore.app/
+        fi
+        
+        # 打包 TrollStore
         cd package
         tar -czf TrollStore.tar TrollStore.app
         cd ..
         
         # 打包 PersistenceHelper_Embedded 文件
-        cd _build
-        tar -czf PersistenceHelper_Embedded.tar PersistenceHelper_Embedded*
-        cd ..
+        if [ -d "_build" ] && [ "$(ls -A _build/PersistenceHelper_Embedded* 2>/dev/null)" ]; then
+          cd _build
+          tar -czf PersistenceHelper_Embedded.tar PersistenceHelper_Embedded*
+          cd ..
+        fi
         
     # 上传 TrollStore 构建产物
     - name: Upload TrollStore Artifact
