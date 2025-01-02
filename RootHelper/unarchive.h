@@ -1,3 +1,3 @@
 @import Foundation;
 
-extern int extract(NSString* fileToExtract, NSString* extractionPath);
+extern int untarTarGz(NSString* fileToExtract, NSString* extractionPath);
