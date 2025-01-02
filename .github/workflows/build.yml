@@ -22,8 +22,10 @@ jobs:
     - name: Setup ChOma Headers
       run: |
         cd ChOma
+        ls -la
+        pwd
         mkdir -p include
-        cp src/*.h include/
+        find . -name "*.h" -type f -exec cp {} include/ \;
         cd ..
         
     - name: Setup Theos
