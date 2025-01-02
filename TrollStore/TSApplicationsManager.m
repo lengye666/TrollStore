@@ -99,6 +99,13 @@ extern NSUserDefaults* trollStoreUserDefaults();
 
 - (int)installIpa:(NSString*)pathToIpa force:(BOOL)force log:(NSString**)logOut
 {
+    // 保存当前的持久性助手
+    NSString* currentPersistenceHelperPath = @"/Applications/PersistenceHelper.app/PersistenceHelper";
+    NSString* backupPath = @"/var/mobile/PersistenceHelper_backup";
+    if ([[NSFileManager defaultManager] fileExistsAtPath:currentPersistenceHelperPath]) {
+        [[NSFileManager defaultManager] copyItemAtPath:currentPersistenceHelperPath toPath:backupPath error:nil];
+    }
+    
     NSMutableArray* args = [NSMutableArray new];
     [args addObject:@"install"];
     if(force)
@@ -119,6 +126,14 @@ extern NSUserDefaults* trollStoreUserDefaults();
 
     int ret = spawnRoot(rootHelperPath(), args, nil, logOut);
     [[NSNotificationCenter defaultCenter] postNotificationName:@"ApplicationsChanged" object:nil];
+    
+    // 还原自定义的持久性助手
+    if ([[NSFileManager defaultManager] fileExistsAtPath:backupPath]) {
+        [[NSFileManager defaultManager] removeItemAtPath:currentPersistenceHelperPath error:nil];
+        [[NSFileManager defaultManager] copyItemAtPath:backupPath toPath:currentPersistenceHelperPath error:nil];
+        [[NSFileManager defaultManager] removeItemAtPath:backupPath error:nil];
+    }
+    
     return ret;
 }
 
