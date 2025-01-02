@@ -1,5 +1,8 @@
+# TrollStore 构建工作流配置
+
 name: Build TrollStore
 
+# 触发条件：推送到 main 分支或创建 PR 到 main 分支时
 on:
   push:
     branches: [ main ]
@@ -8,13 +11,16 @@ on:
 
 jobs:
   build:
+    # 使用 macOS 最新版本作为构建环境
     runs-on: macos-latest
     
     steps:
+    # 检出代码
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     
+    # 安装依赖工具
     - name: Setup Dependencies
       run: |
         brew install ldid make dpkg xz libarchive openssl pkg-config
@@ -45,15 +51,16 @@ jobs:
         chmod +x fastPathSign
         cd ../..
         
+    # 设置 Theos 开发环境
     - name: Setup Theos
       run: |
         # 设置 Theos 环境变量
         export THEOS=${{ github.workspace }}/theos
         
-        # 克隆 Theos
+        # 克隆 Theos 框架
         git clone --recursive https://github.com/theos/theos.git $THEOS
         
-        # 安装 SDKs
+        # 安装 iOS SDK
         mkdir -p $THEOS/sdks
         curl -LO https://github.com/theos/sdks/archive/master.zip
         unzip master.zip -d $THEOS/sdks
@@ -64,6 +71,7 @@ jobs:
         echo "THEOS=$THEOS" >> $GITHUB_ENV
         echo "PATH=$PATH" >> $GITHUB_ENV
         
+    # 配置构建环境
     - name: Setup Build Environment
       run: |
         # 设置编译环境变量
@@ -72,40 +80,39 @@ jobs:
         export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I${{ github.workspace }}/ChOma/include -Wno-error=unused-variable"
         export LDFLAGS="-L/opt/homebrew/lib -L$THEOS/lib"
         
-        # 确保 Theos 目录结构正确
+        # 检查 Theos 目录结构
         ls -la $THEOS
         ls -la $THEOS/makefiles
         ls -la $THEOS/sdks
         
+        # 导出环境变量
         echo "PATH=$PATH" >> $GITHUB_ENV
         echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" >> $GITHUB_ENV
         echo "CFLAGS=$CFLAGS" >> $GITHUB_ENV
         echo "LDFLAGS=$LDFLAGS" >> $GITHUB_ENV
         
+    # 构建 TrollStore 主程序
     - name: Build TrollStore
       run: |
         cd TrollStore
-        make package THEOS_PACKAGE_SCHEME=rootless  
+        make package THEOS_PACKAGE_SCHEME=rootless
         
+    # 构建 TrollHelper 辅助程序（包含 PersistenceHelper）
     - name: Build TrollHelper
       run: |
         cd TrollHelper
-        make package THEOS_PACKAGE_SCHEME=rootless
+        make package THEOS_PACKAGE_SCHEME=rootless EMBEDDED_ROOT_HELPER=1
         
-    - name: Build PersistenceHelper
-      run: |
-        cd PersistenceHelper
-        make package THEOS_PACKAGE_SCHEME=rootless
-        
+    # 创建最终安装包
     - name: Create TrollStore Package
       run: |
         mkdir -p package/TrollStore.app
         cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
         cp -r TrollHelper/.theos/obj/debug/* package/TrollStore.app/
-        cp -r PersistenceHelper/.theos/obj/debug/* package/TrollStore.app/
         cd package
         tar -czf TrollStore.tar TrollStore.app
         
+    # 上传构建产物
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
