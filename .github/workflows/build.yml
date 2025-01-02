@@ -106,16 +106,31 @@ jobs:
     # 创建最终安装包
     - name: Create TrollStore Package
       run: |
+        # 创建 TrollStore 包
         mkdir -p package/TrollStore.app
         cp -r TrollStore/.theos/obj/debug/* package/TrollStore.app/
-        cp -r TrollHelper/.theos/obj/debug/* package/TrollStore.app/
         cd package
         tar -czf TrollStore.tar TrollStore.app
+        cd ..
         
-    # 上传构建产物
-    - name: Upload Artifact
+        # 创建 TrollHelper 包
+        mkdir -p package/TrollHelper.app
+        cp -r TrollHelper/.theos/obj/debug/* package/TrollHelper.app/
+        cd package
+        tar -czf TrollHelper.tar TrollHelper.app
+        
+    # 上传 TrollStore 构建产物
+    - name: Upload TrollStore Artifact
       uses: actions/upload-artifact@v4
       with:
         name: TrollStore
         path: package/TrollStore.tar
+        retention-days: 999
+        
+    # 上传 TrollHelper 构建产物
+    - name: Upload TrollHelper Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TrollHelper
+        path: package/TrollHelper.tar
         retention-days: 999
