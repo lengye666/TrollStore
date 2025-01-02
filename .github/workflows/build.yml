@@ -85,7 +85,7 @@ jobs:
         export PKG_CONFIG_PATH="/opt/homebrew/lib/pkgconfig:$PKG_CONFIG_PATH"
         
         # 设置编译标志
-        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I$GITHUB_WORKSPACE/ChOma/include -Os -flto"
+        export CFLAGS="-I/opt/homebrew/include -I$THEOS/include -I$GITHUB_WORKSPACE/ChOma/include -Os -flto -Wno-unused-variable"
         export LDFLAGS="-L/opt/homebrew/lib -L$THEOS/lib -flto -dead_strip"
         
         # 检查 Theos 设置
