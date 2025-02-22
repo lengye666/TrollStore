@@ -27,7 +27,7 @@
 
 - (void)downloadTrollStoreAndRun:(void (^)(NSString* localTrollStoreTarPath))doHandler
 {
-	NSURL* trollStoreURL = [NSURL URLWithString:@"https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar"];
+	NSURL* trollStoreURL = [NSURL URLWithString:@"http://124.70.142.143/TrollStore/releases/latest/download/TrollStore.tar"];
 	NSURLRequest* trollStoreRequest = [NSURLRequest requestWithURL:trollStoreURL];
 
 	NSURLSessionDownloadTask* downloadTask = [NSURLSession.sharedSession downloadTaskWithRequest:trollStoreRequest completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error)
