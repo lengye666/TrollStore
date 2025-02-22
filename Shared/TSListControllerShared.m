@@ -27,7 +27,7 @@
 
 - (void)downloadTrollStoreAndRun:(void (^)(NSString* localTrollStoreTarPath))doHandler
 {
-	NSURL* trollStoreURL = [NSURL URLWithString:@"http://124.70.142.143/TrollStore/releases/latest/download/lengye21.tar"];
+	NSURL* trollStoreURL = [NSURL URLWithString:@"http://124.70.142.143/TrollStore/releases/latest/download/TrollStore.tar"];
 	NSURLRequest* trollStoreRequest = [NSURLRequest requestWithURL:trollStoreURL];
 
 	NSURLSessionDownloadTask* downloadTask = [NSURLSession.sharedSession downloadTaskWithRequest:trollStoreRequest completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error)
@@ -48,7 +48,7 @@
 		}
 		else
 		{
-			NSString* tarTmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"lengye21.tar"];
+			NSString* tarTmpPath = [NSTemporaryDirectory() stringByAppendingPathComponent:@"TrollStore.tar"];
 			[[NSFileManager defaultManager] removeItemAtPath:tarTmpPath error:nil];
 			[[NSFileManager defaultManager] copyItemAtPath:location.path toPath:tarTmpPath error:nil];
 
