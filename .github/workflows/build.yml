@@ -1,0 +1,95 @@
+name: Build TrollStore
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+    
+    - name: Install dependencies
+      run: |
+        brew install ldid
+        brew install make
+        brew install openssl@3
+        brew install libarchive
+        brew install pkg-config
+        
+    - name: Setup Theos
+      run: |
+        git clone --recursive https://github.com/theos/theos.git theos
+        curl -LO https://github.com/theos/sdks/archive/master.zip
+        unzip master.zip
+        mkdir -p theos/sdks
+        mv sdks-master/* theos/sdks/
+        rm -rf sdks-master master.zip
+        
+    - name: Build ChOma
+      run: |
+        cd ChOma
+        make
+        sudo make install
+        cd ..
+        
+    - name: Build Pwnify
+      run: |
+        cd Pwnify
+        make
+        sudo make install
+        cd ..
+        
+        
+    - name: Build project
+      env:
+        THEOS: ${{ github.workspace }}/theos
+      run: |
+        set -e
+        export PATH=$THEOS/bin:$PATH
+        export THEOS_DEVICE_IP=127.0.0.1
+        export THEOS_PLATFORM=ios
+        
+        # 首先构建 fastPathSign
+        cd Exploits/fastPathSign
+        make
+        cd ../..
+        
+        # 然后按顺序构建其他组件
+        make pre_build
+        make make_roothelper MAKECMDGOALS=all
+        make make_trollstore MAKECMDGOALS=all
+        make make_trollhelper_embedded MAKECMDGOALS=all
+        make make_trollhelper_package MAKECMDGOALS=all
+        make assemble_trollstore
+        # 跳过这些需要 InstallerVictim.ipa 的步骤
+        # make build_installer15
+        # make build_installer64e
+        make make_trollstore_lite MAKECMDGOALS=all
+        
+        # 验证编译结果
+        ls -l _build/
+        
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: TrollStore-Build
+        path: |
+          _build/
+          TrollStore/packages/*.deb
+          TrollHelper/packages/*.deb
+
+    - name: Prepare Victim
+      run: |
+        mkdir -p Victim
+        cd Victim
+        # 创建一个最小的 IPA 文件结构
+        mkdir -p Payload/Example.app
+        touch Payload/Example.app/Example
+        zip -r InstallerVictim.ipa Payload
+        cd ..
