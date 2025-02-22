@@ -38,16 +38,16 @@
 		_specifiers = [NSMutableArray new];
 
 		#ifdef LEGACY_CT_BUG
-		NSString* credits = @"Powered by Fugu15 CoreTrust & installd bugs, thanks to @LinusHenze\n\n© 2022-2024 Lars Fröder (opa334)";
+		NSString* credits = @"巨魔源码优化版本无需梯子By：老司机巨魔---IOS巨魔王  合作请联系长期稳定游戏科技\n\n© 2022-2025";
 		#else
-		NSString* credits = @"Powered by CVE-2023-41991, originally discovered by Google TAG, rediscovered via patchdiffing by @alfiecg_dev\n\n© 2022-2024 Lars Fröder (opa334)";
+		NSString* credits = @"尊重劳动成果禁止白嫖！  恶意仅退款、恶意差评、白嫖党，替我挡灾厄运缠身！\n\n© 2022-2025 微信V：BuLu-0208 (opa334)";
 		#endif
 
 		PSSpecifier* infoGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
 		infoGroupSpecifier.name = @"Info";
 		[_specifiers addObject:infoGroupSpecifier];
 
-		PSSpecifier* infoSpecifier = [PSSpecifier preferenceSpecifierNamed:@"TrollStore"
+		PSSpecifier* infoSpecifier = [PSSpecifier preferenceSpecifierNamed:@"巨 魔 商 店"
 											target:self
 											set:nil
 											get:@selector(getTrollStoreInfoString)
@@ -64,7 +64,7 @@
 		if(_newerVersion && isInstalled)
 		{
 			// Update TrollStore
-			PSSpecifier* updateTrollStoreSpecifier = [PSSpecifier preferenceSpecifierNamed:[NSString stringWithFormat:@"Update TrollStore to %@", _newerVersion]
+			PSSpecifier* updateTrollStoreSpecifier = [PSSpecifier preferenceSpecifierNamed:[NSString stringWithFormat:@"更新 巨魔商店 to %@", _newerVersion]
 										target:self
 										set:nil
 										get:nil
@@ -86,7 +86,7 @@
 
 		if(isInstalled || trollStoreInstalledAppContainerPaths().count)
 		{
-			PSSpecifier* refreshAppRegistrationsSpecifier = [PSSpecifier preferenceSpecifierNamed:@"Refresh App Registrations"
+			PSSpecifier* refreshAppRegistrationsSpecifier = [PSSpecifier preferenceSpecifierNamed:@"打不开巨魔点击这里（刷新缓存）"
 												target:self
 												set:nil
 												get:nil
@@ -100,7 +100,7 @@
 		}
 		if(isInstalled)
 		{
-			PSSpecifier* uninstallTrollStoreSpecifier = [PSSpecifier preferenceSpecifierNamed:@"Uninstall TrollStore"
+			PSSpecifier* uninstallTrollStoreSpecifier = [PSSpecifier preferenceSpecifierNamed:@"卸 载 巨 魔（三思而后行）"
 										target:self
 										set:nil
 										get:nil
@@ -115,7 +115,7 @@
 		}
 		else
 		{
-			PSSpecifier* installTrollStoreSpecifier = [PSSpecifier preferenceSpecifierNamed:@"Install TrollStore"
+			PSSpecifier* installTrollStoreSpecifier = [PSSpecifier preferenceSpecifierNamed:@"安 装 巨 魔"
 												target:self
 												set:nil
 												get:nil
@@ -135,7 +135,7 @@
 			[_specifiers addObject:uninstallHelperGroupSpecifier];
 			lastGroupSpecifier = uninstallHelperGroupSpecifier;
 
-			PSSpecifier* uninstallPersistenceHelperSpecifier = [PSSpecifier preferenceSpecifierNamed:@"Uninstall Persistence Helper"
+			PSSpecifier* uninstallPersistenceHelperSpecifier = [PSSpecifier preferenceSpecifierNamed:@"卸 载 持 久 性 助 手"
 												target:self
 												set:nil
 												get:nil
@@ -205,7 +205,7 @@
 		}
 	}
 	
-	[(UINavigationItem *)self.navigationItem setTitle:@"TrollStore Helper"];
+	[(UINavigationItem *)self.navigationItem setTitle:@"巨魔商店安装助手"];
 	return _specifiers;
 }
 
