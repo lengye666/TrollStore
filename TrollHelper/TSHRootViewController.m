@@ -38,9 +38,9 @@
 		_specifiers = [NSMutableArray new];
 
 		#ifdef LEGACY_CT_BUG
-		NSString* credits = @"巨魔源码优化版本无需梯子By：老司机巨魔---IOS巨魔王  合作请联系长期稳定游戏科技\n\n© 2022-2025";
+		NSString* credits = @"巨魔源码优化版本无需梯子By：老司机巨魔---IOS巨魔王  合作请联系长期稳定游戏科技© 2022-2025";
 		#else
-		NSString* credits = @"尊重劳动成果禁止白嫖！  恶意仅退款、恶意差评、白嫖党，替我挡灾厄运缠身！\n\n© 2022-2025 微信V：BuLu-0208 (opa334)";
+		NSString* credits = @"巨魔源码优化版本无需梯子By：老司机巨魔---IOS巨魔王  合作请联系长期稳定游戏科技尊重劳动成果！\n\n禁止白嫖！  恶意仅退款、恶意差评、白嫖党，替我挡灾厄运缠身！\n\n© 2022-2025 微信V：BuLu-0208 (opa334)";
 		#endif
 
 		PSSpecifier* infoGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
