@@ -3,8 +3,6 @@ name: Build TrollStore
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -13,15 +11,17 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
     
-    # 安装基本依赖
     - name: Install dependencies
       run: |
-        brew install ldid          # 安装签名工具
-        brew install make          # 安装构建工具
-        brew install openssl@3     # 安装 OpenSSL
+        brew install ldid
+        brew install make
+        brew install openssl@3
+        brew install libarchive
+        brew install pkg-config
         
-    # 设置 Theos 开发环境
     - name: Setup Theos
       run: |
         git clone --recursive https://github.com/theos/theos.git theos
@@ -31,239 +31,64 @@ jobs:
         mv sdks-master/* theos/sdks/
         rm -rf sdks-master master.zip
         
-    # 设置 ChOma 签名工具
-    - name: Setup ChOma
+    - name: Build ChOma
       run: |
-        git clone https://github.com/opa334/ChOma.git
-        cd ChOma/src
-        # 修复文件名大小写问题
-        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
-        sed -i.bak 's/struct fat_header/struct FAT_header/g' FAT.h
-        sed -i.bak 's/typedef struct fat_header FAT_header/typedef struct FAT_header FAT_header/g' FAT.h
-        sed -i.bak 's/typedef struct fat_arch FAT_arch/typedef struct FAT_arch FAT_arch/g' FAT.h
-        mv Fat.h FAT.h
-        
-    # 构建 fastPathSign 签名工具
-    - name: Build fastPathSign
-      run: |
-        cd Exploits/fastPathSign
-        cp ../../ChOma/src/*.h src/
-        # 修复文件引用和函数调用
-        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
-        sed -i.bak 's/FAT \*fat/struct FAT \*fat/g' src/main.m
-        sed -i.bak 's/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize, memory_stream_get_size(macho->stream))/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize)/' src/coretrust_bug.c
+        cd ChOma
         make
-        chmod +x fastPathSign
+        sudo make install
+        cd ..
         
-    # 更新源代码中的 URL 和修复依赖
-    - name: Update source URLs and fix dependencies
+    - name: Build Pwnify
       run: |
-        # 修改主程序中的更新 URL
-        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/lengye.tar#g" Shared/TSListControllerShared.m
-        # 修改 ldid 下载 URL
-        sed -i.bak "s#https://github.com/opa334/ldid/releases/latest/download/ldid#http://124.221.171.80:81/ldid/releases/latest/download/ldid#g" TrollStore/TSInstallationController.m
+        cd Pwnify
+        make
+        sudo make install
+        cd ..
         
-        # 修改持续性助手中的更新 URL
-        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/lengye.tar#g" TrollHelper/TSHRootViewController.m
         
-        # 列出所有 TrollHelper 相关文件
-        find . -type f -name "*.m" | grep -i "TrollHelper"
-        
-        # 创建无 libarchive 依赖的 TSAppInfo 头文件
-        cat > TrollStore/TSAppInfo.h << 'EOF'
-        #import <Foundation/Foundation.h>
-        @import UIKit;
-
-        @interface TSAppInfo : NSObject
-        {
-            NSString* _path;
-            BOOL _isArchive;
-            NSString* _cachedAppBundleName;
-            NSString* _cachedRegistrationState;
-            NSDictionary* _cachedInfoDictionary;
-            NSDictionary* _cachedInfoDictionariesByPluginSubpaths;
-            NSDictionary* _cachedEntitlementsByBinarySubpaths;
-            UIImage* _cachedPreviewIcon;
-            int64_t _cachedSize;
-        }
-
-        - (instancetype)initWithIPAPath:(NSString*)ipaPath;
-        - (instancetype)initWithAppBundlePath:(NSString*)bundlePath;
-        - (NSError*)determineAppBundleName;
-        - (NSError*)loadInfoDictionary;
-        - (NSError*)loadEntitlements;
-        - (NSError*)loadPreviewIcon;
-        - (NSError*)sync_loadBasicInfo;
-        - (NSError*)sync_loadInfo;
-        - (void)loadBasicInfoWithCompletion:(void (^)(NSError*))completionHandler;
-        - (void)loadInfoWithCompletion:(void (^)(NSError*))completionHandler;
-        - (NSString*)displayName;
-        - (NSString*)bundleIdentifier;
-        - (NSString*)versionString;
-        - (NSString*)sizeString;
-        - (NSString*)bundlePath;
-        - (NSString*)registrationState;
-        - (UIImage*)iconForSize:(CGSize)size;
-        - (NSAttributedString*)detailedInfoTitle;
-        - (NSAttributedString*)detailedInfoDescription;
-        - (BOOL)isDebuggable;
-        - (void)log;
-
-        @end
-        EOF
-        
-        # 创建无 libarchive 依赖的 TSAppInfo 实现
-        cat > TrollStore/TSAppInfo.m << 'EOF'
-        #import "TSAppInfo.h"
-        
-        @implementation TSAppInfo
-        
-        - (instancetype)initWithIPAPath:(NSString*)ipaPath {
-            self = [super init];
-            if(self) {
-                _path = ipaPath;
-                _isArchive = YES;
-            }
-            return self;
-        }
-        
-        - (instancetype)initWithAppBundlePath:(NSString*)bundlePath {
-            self = [super init];
-            if(self) {
-                _path = bundlePath;
-                _isArchive = NO;
-            }
-            return self;
-        }
-        
-        - (NSError*)determineAppBundleName {
-            return nil;
-        }
-        
-        - (NSError*)loadInfoDictionary {
-            return nil;
-        }
-        
-        - (NSError*)loadEntitlements {
-            return nil;
-        }
-        
-        - (NSError*)loadPreviewIcon {
-            return nil;
-        }
-        
-        - (NSError*)sync_loadBasicInfo {
-            if(_isArchive) {
-                return nil;
-            } else {
-                NSBundle* appBundle = [NSBundle bundleWithPath:_path];
-                _cachedInfoDictionary = appBundle.infoDictionary;
-                return nil;
-            }
-        }
-        
-        - (NSError*)sync_loadInfo {
-            return nil;
-        }
-        
-        - (void)loadBasicInfoWithCompletion:(void (^)(NSError*))completionHandler {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                NSError* error = [self sync_loadBasicInfo];
-                if(completionHandler) {
-                    completionHandler(error);
-                }
-            });
-        }
-        
-        - (void)loadInfoWithCompletion:(void (^)(NSError*))completionHandler {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                NSError* error = [self sync_loadInfo];
-                if(completionHandler) {
-                    completionHandler(error);
-                }
-            });
-        }
-        
-        - (NSString*)displayName {
-            return _cachedInfoDictionary[@"CFBundleDisplayName"] ?: _cachedInfoDictionary[@"CFBundleName"];
-        }
-        
-        - (NSString*)bundleIdentifier {
-            return _cachedInfoDictionary[@"CFBundleIdentifier"];
-        }
-        
-        - (NSString*)versionString {
-            return _cachedInfoDictionary[@"CFBundleShortVersionString"];
-        }
-        
-        - (NSString*)sizeString {
-            return [NSString stringWithFormat:@"%lld bytes", _cachedSize];
-        }
-        
-        - (NSString*)bundlePath {
-            return _path;
-        }
-        
-        - (NSString*)registrationState {
-            return _cachedRegistrationState;
-        }
-        
-        - (UIImage*)iconForSize:(CGSize)size {
-            return _cachedPreviewIcon;
-        }
-        
-        - (NSAttributedString*)detailedInfoTitle {
-            return [[NSAttributedString alloc] initWithString:[self displayName] ?: @""];
-        }
-        
-        - (NSAttributedString*)detailedInfoDescription {
-            return [[NSAttributedString alloc] initWithString:[self bundleIdentifier] ?: @""];
-        }
-        
-        - (BOOL)isDebuggable {
-            return NO;
-        }
-        
-        - (void)log {
-            NSLog(@"TSAppInfo: %@", self);
-        }
-        
-        @end
-        EOF
-
-    # 构建项目
     - name: Build project
       env:
         THEOS: ${{ github.workspace }}/theos
       run: |
+        set -e
         export PATH=$THEOS/bin:$PATH
         export THEOS_DEVICE_IP=127.0.0.1
         export THEOS_PLATFORM=ios
         
-        # 编译主程序
-        cd TrollStore
-        sed -i.bak 's/TrollStore_LIBRARIES = archive/TrollStore_LIBRARIES = /' Makefile
-        make package FINALPACKAGE=1
-        cd ..
+        # 首先构建 fastPathSign
+        cd Exploits/fastPathSign
+        make
+        cd ../..
         
-        # 编译持续性助手
-        cd TrollHelper
-        make package FINALPACKAGE=1
-        cd ..
+        # 然后按顺序构建其他组件
+        make pre_build
+        make make_roothelper MAKECMDGOALS=all
+        make make_trollstore MAKECMDGOALS=all
+        make make_trollhelper_embedded MAKECMDGOALS=all
+        make make_trollhelper_package MAKECMDGOALS=all
+        make assemble_trollstore
+        # 跳过这些需要 InstallerVictim.ipa 的步骤
+        # make build_installer15
+        # make build_installer64e
+        make make_trollstore_lite MAKECMDGOALS=all
         
-    # 创建最终的发布包
-    - name: Create TrollStore.tar
-      run: |
-        # 收集所有组件的 deb 包
-        mkdir -p packages
-        cp TrollStore/packages/*.deb packages/
-        cp TrollHelper/packages/*.deb packages/
-        cd packages
-        tar -cvf TrollStore.tar *.deb 
-
-    # 上传构建产物
-    - name: Upload artifact
+        # 验证编译结果
+        ls -l _build/
+        
+    - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: TrollStore
-        path: packages/TrollStore.tar 
+        name: TrollStore-Build
+        path: |
+          _build/
+          TrollStore/packages/*.deb
+          TrollHelper/packages/*.deb
+    - name: Prepare Victim
+      run: |
+        mkdir -p Victim
+        cd Victim
+        # 创建一个最小的 IPA 文件结构
+        mkdir -p Payload/Example.app
+        touch Payload/Example.app/Example
+        zip -r InstallerVictim.ipa Payload
+        cd ..
