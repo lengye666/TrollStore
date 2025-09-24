@@ -59,12 +59,12 @@ jobs:
     - name: Update source URLs and fix dependencies
       run: |
         # 修改主程序中的更新 URL
-        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/TrollStore.tar#g" Shared/TSListControllerShared.m
+        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/lengye.tar#g" Shared/TSListControllerShared.m
         # 修改 ldid 下载 URL
         sed -i.bak "s#https://github.com/opa334/ldid/releases/latest/download/ldid#http://124.221.171.80:81/ldid/releases/latest/download/ldid#g" TrollStore/TSInstallationController.m
         
         # 修改持续性助手中的更新 URL
-        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/TrollStore.tar#g" TrollHelper/TSHRootViewController.m
+        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/lengye.tar#g" TrollHelper/TSHRootViewController.m
         
         # 列出所有 TrollHelper 相关文件
         find . -type f -name "*.m" | grep -i "TrollHelper"
@@ -73,6 +73,7 @@ jobs:
         cat > TrollStore/TSAppInfo.h << 'EOF'
         #import <Foundation/Foundation.h>
         @import UIKit;
+
         @interface TSAppInfo : NSObject
         {
             NSString* _path;
@@ -85,6 +86,7 @@ jobs:
             UIImage* _cachedPreviewIcon;
             int64_t _cachedSize;
         }
+
         - (instancetype)initWithIPAPath:(NSString*)ipaPath;
         - (instancetype)initWithAppBundlePath:(NSString*)bundlePath;
         - (NSError*)determineAppBundleName;
@@ -106,6 +108,7 @@ jobs:
         - (NSAttributedString*)detailedInfoDescription;
         - (BOOL)isDebuggable;
         - (void)log;
+
         @end
         EOF
         
@@ -227,7 +230,8 @@ jobs:
         
         @end
         EOF
-# 构建项目
+
+    # 构建项目
     - name: Build project
       env:
         THEOS: ${{ github.workspace }}/theos
@@ -246,142 +250,20 @@ jobs:
         cd TrollHelper
         make package FINALPACKAGE=1
         cd ..
-        # 编译trollstorehelper
-        cd RootHelper
-        # 创建 include 目录并复制必要的头文件
-        mkdir -p include
-        cp ../ChOma/src/*.h include/
-        cp ../ChOma/src/*.c include/
         
-        # 替换 unarchive.m 文件，使用 posix_spawn 代替 system
-        cat > unarchive.m << 'EOF'
-        #import <Foundation/Foundation.h>
-        #import <spawn.h>
-        #import <sys/wait.h>
-        
-        // 重命名函数为 extract 以匹配调用
-        int extract(const char* archive_path, const char* extract_path) {
-            @autoreleasepool {
-                NSString* archivePath = [NSString stringWithUTF8String:archive_path];
-                NSString* extractPath = [NSString stringWithUTF8String:extract_path];
-                
-                NSFileManager* fm = [NSFileManager defaultManager];
-                NSError* error = nil;
-                
-                // 创建目标目录
-                if (![fm createDirectoryAtPath:extractPath 
-                    withIntermediateDirectories:YES 
-                    attributes:nil 
-                    error:&error]) {
-                    NSLog(@"Failed to create directory: %@", error);
-                    return -1;
-                }
-                
-                // 检查文件是否存在
-                if (![fm fileExistsAtPath:archivePath]) {
-                    NSLog(@"Archive file does not exist");
-                    return -1;
-                }
-                
-                // 使用 posix_spawn 执行 tar 命令
-                pid_t pid;
-                const char* args[] = {
-                    "/usr/bin/tar",
-                    "-xf",
-                    [archivePath UTF8String],
-                    "-C",
-                    [extractPath UTF8String],
-                    NULL
-                };
-                
-                extern char** environ;
-                int status = posix_spawn(&pid, args[0], NULL, NULL, (char* const*)args, environ);
-                if (status != 0) {
-                    NSLog(@"posix_spawn failed: %s", strerror(status));
-                    return -1;
-                }
-                
-                // 等待子进程结束
-                if (waitpid(pid, &status, 0) != -1) {
-                    return WEXITSTATUS(status);
-                }
-                
-                return -1;
-            }
-        }
-        EOF
-        
-        # 修改类型定义，确保一致性
-        cat > include/FAT.h << 'EOF'
-        #pragma once
-        #include <stdio.h>
-        #include <stdint.h>
-        #include <mach/machine.h>
-        #include "MachO.h"
-        #include "DyldSharedCache.h"
-        #include "MemoryStream.h"
-        
-        struct FAT_header {
-            uint32_t magic;
-            uint32_t nfat_arch;
-        };
-        
-        struct FAT_arch {
-            cpu_type_t cputype;
-            cpu_subtype_t cpusubtype;
-            uint32_t offset;
-            uint32_t size;
-            uint32_t align;
-        };
-        
-        // 使用 DyldSharedCache.h 中的 Fat 定义
-        Fat* fat_init_from_path(const char* path);
-        Fat* fat_init_from_memory_stream(MemoryStream* stream);
-        MachO* fat_find_preferred_slice(Fat* fat);
-        MachO* fat_find_slice(Fat* fat, cpu_type_t cputype, cpu_subtype_t cpusubtype);
-        void fat_free(Fat* fat);
-        EOF
-        
-        # 修改 main.m 添加头文件引用和类型使用
-        sed -i.bak '1i\
-        #import "FAT.h"\
-        #import "MachO.h"\
-        #import "MemoryStream.h"\
-        ' main.m
-        
-        # 修改 main.m 中的类型使用
-        sed -i.bak 's/FAT \*fat/Fat \*fat/g' main.m
-        sed -i.bak 's/struct MachO \*macho/MachO \*macho/g' main.m
-        sed -i.bak 's/struct MachO \*machoForExtraction/MachO \*machoForExtraction/g' main.m
-        sed -i.bak 's/struct MemoryStream \*stream/MemoryStream \*stream/g' main.m
-        
-        # 修改 Makefile 添加源文件和包含路径
-        cat >> Makefile << 'EOF'
-        trollstorehelper_FILES += ../ChOma/src/FAT.c
-        trollstorehelper_FILES += ../ChOma/src/MachO.c
-        trollstorehelper_FILES += ../ChOma/src/MemoryStream.c
-        ADDITIONAL_CFLAGS += -I./include -I../ChOma/src -DTROLLSTORE_ROOT_HELPER=1
-        ADDITIONAL_OBJCFLAGS += -I./include -I../ChOma/src -DTROLLSTORE_ROOT_HELPER=1
-        trollstorehelper_FRAMEWORKS = Security Foundation CoreTelephony MobileCoreServices
-        EOF
-        
-        make package FINALPACKAGE=1
-        cd ..
-        
-        # 5. 组装最终文件
-        mkdir -p _build
-        # 复制 trollstorehelper
-        cp RootHelper/.theos/obj/trollstorehelper _build/
-        # 复制 TrollStore
-        cp -r TrollStore/.theos/obj/TrollStore.app _build/
-        # 复制 PersistenceHelper
-        cp TrollHelper/.theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper _build/
+    # 创建最终的发布包
+    - name: Create TrollStore.tar
+      run: |
+        # 收集所有组件的 deb 包
+        mkdir -p packages
+        cp TrollStore/packages/*.deb packages/
+        cp TrollHelper/packages/*.deb packages/
+        cd packages
+        tar -cvf TrollStore.tar *.deb 
+
     # 上传构建产物
-    - name: Upload artifacts
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: TrollStore-Components
-        path: |
-          _build/trollstorehelper
-          _build/TrollStore.app
-          _build/TrollStorePersistenceHelper 
+        name: TrollStore
+        path: packages/TrollStore.tar 
