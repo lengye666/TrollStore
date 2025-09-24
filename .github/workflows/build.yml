@@ -1,0 +1,387 @@
+name: Build TrollStore
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    # 安装基本依赖
+    - name: Install dependencies
+      run: |
+        brew install ldid          # 安装签名工具
+        brew install make          # 安装构建工具
+        brew install openssl@3     # 安装 OpenSSL
+        
+    # 设置 Theos 开发环境
+    - name: Setup Theos
+      run: |
+        git clone --recursive https://github.com/theos/theos.git theos
+        curl -LO https://github.com/theos/sdks/archive/master.zip
+        unzip master.zip
+        mkdir -p theos/sdks
+        mv sdks-master/* theos/sdks/
+        rm -rf sdks-master master.zip
+        
+    # 设置 ChOma 签名工具
+    - name: Setup ChOma
+      run: |
+        git clone https://github.com/opa334/ChOma.git
+        cd ChOma/src
+        # 修复文件名大小写问题
+        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
+        sed -i.bak 's/struct fat_header/struct FAT_header/g' FAT.h
+        sed -i.bak 's/typedef struct fat_header FAT_header/typedef struct FAT_header FAT_header/g' FAT.h
+        sed -i.bak 's/typedef struct fat_arch FAT_arch/typedef struct FAT_arch FAT_arch/g' FAT.h
+        mv Fat.h FAT.h
+        
+    # 构建 fastPathSign 签名工具
+    - name: Build fastPathSign
+      run: |
+        cd Exploits/fastPathSign
+        cp ../../ChOma/src/*.h src/
+        # 修复文件引用和函数调用
+        find . -type f -name "*.h" -o -name "*.c" -o -name "*.m" | xargs sed -i.bak 's/"Fat\.h"/"FAT.h"/g'
+        sed -i.bak 's/FAT \*fat/struct FAT \*fat/g' src/main.m
+        sed -i.bak 's/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize, memory_stream_get_size(macho->stream))/update_load_commands_for_coretrust_bypass(macho, encodedSuperblobUnsigned, originalCodeSignatureSize)/' src/coretrust_bug.c
+        make
+        chmod +x fastPathSign
+        
+    # 更新源代码中的 URL 和修复依赖
+    - name: Update source URLs and fix dependencies
+      run: |
+        # 修改主程序中的更新 URL
+        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/TrollStore.tar#g" Shared/TSListControllerShared.m
+        # 修改 ldid 下载 URL
+        sed -i.bak "s#https://github.com/opa334/ldid/releases/latest/download/ldid#http://124.221.171.80:81/ldid/releases/latest/download/ldid#g" TrollStore/TSInstallationController.m
+        
+        # 修改持续性助手中的更新 URL
+        sed -i.bak "s#https://github.com/opa334/TrollStore/releases/latest/download/TrollStore.tar#http://124.221.171.80:81/TrollStore/releases/latest/download/TrollStore.tar#g" TrollHelper/TSHRootViewController.m
+        
+        # 列出所有 TrollHelper 相关文件
+        find . -type f -name "*.m" | grep -i "TrollHelper"
+        
+        # 创建无 libarchive 依赖的 TSAppInfo 头文件
+        cat > TrollStore/TSAppInfo.h << 'EOF'
+        #import <Foundation/Foundation.h>
+        @import UIKit;
+        @interface TSAppInfo : NSObject
+        {
+            NSString* _path;
+            BOOL _isArchive;
+            NSString* _cachedAppBundleName;
+            NSString* _cachedRegistrationState;
+            NSDictionary* _cachedInfoDictionary;
+            NSDictionary* _cachedInfoDictionariesByPluginSubpaths;
+            NSDictionary* _cachedEntitlementsByBinarySubpaths;
+            UIImage* _cachedPreviewIcon;
+            int64_t _cachedSize;
+        }
+        - (instancetype)initWithIPAPath:(NSString*)ipaPath;
+        - (instancetype)initWithAppBundlePath:(NSString*)bundlePath;
+        - (NSError*)determineAppBundleName;
+        - (NSError*)loadInfoDictionary;
+        - (NSError*)loadEntitlements;
+        - (NSError*)loadPreviewIcon;
+        - (NSError*)sync_loadBasicInfo;
+        - (NSError*)sync_loadInfo;
+        - (void)loadBasicInfoWithCompletion:(void (^)(NSError*))completionHandler;
+        - (void)loadInfoWithCompletion:(void (^)(NSError*))completionHandler;
+        - (NSString*)displayName;
+        - (NSString*)bundleIdentifier;
+        - (NSString*)versionString;
+        - (NSString*)sizeString;
+        - (NSString*)bundlePath;
+        - (NSString*)registrationState;
+        - (UIImage*)iconForSize:(CGSize)size;
+        - (NSAttributedString*)detailedInfoTitle;
+        - (NSAttributedString*)detailedInfoDescription;
+        - (BOOL)isDebuggable;
+        - (void)log;
+        @end
+        EOF
+        
+        # 创建无 libarchive 依赖的 TSAppInfo 实现
+        cat > TrollStore/TSAppInfo.m << 'EOF'
+        #import "TSAppInfo.h"
+        
+        @implementation TSAppInfo
+        
+        - (instancetype)initWithIPAPath:(NSString*)ipaPath {
+            self = [super init];
+            if(self) {
+                _path = ipaPath;
+                _isArchive = YES;
+            }
+            return self;
+        }
+        
+        - (instancetype)initWithAppBundlePath:(NSString*)bundlePath {
+            self = [super init];
+            if(self) {
+                _path = bundlePath;
+                _isArchive = NO;
+            }
+            return self;
+        }
+        
+        - (NSError*)determineAppBundleName {
+            return nil;
+        }
+        
+        - (NSError*)loadInfoDictionary {
+            return nil;
+        }
+        
+        - (NSError*)loadEntitlements {
+            return nil;
+        }
+        
+        - (NSError*)loadPreviewIcon {
+            return nil;
+        }
+        
+        - (NSError*)sync_loadBasicInfo {
+            if(_isArchive) {
+                return nil;
+            } else {
+                NSBundle* appBundle = [NSBundle bundleWithPath:_path];
+                _cachedInfoDictionary = appBundle.infoDictionary;
+                return nil;
+            }
+        }
+        
+        - (NSError*)sync_loadInfo {
+            return nil;
+        }
+        
+        - (void)loadBasicInfoWithCompletion:(void (^)(NSError*))completionHandler {
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                NSError* error = [self sync_loadBasicInfo];
+                if(completionHandler) {
+                    completionHandler(error);
+                }
+            });
+        }
+        
+        - (void)loadInfoWithCompletion:(void (^)(NSError*))completionHandler {
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                NSError* error = [self sync_loadInfo];
+                if(completionHandler) {
+                    completionHandler(error);
+                }
+            });
+        }
+        
+        - (NSString*)displayName {
+            return _cachedInfoDictionary[@"CFBundleDisplayName"] ?: _cachedInfoDictionary[@"CFBundleName"];
+        }
+        
+        - (NSString*)bundleIdentifier {
+            return _cachedInfoDictionary[@"CFBundleIdentifier"];
+        }
+        
+        - (NSString*)versionString {
+            return _cachedInfoDictionary[@"CFBundleShortVersionString"];
+        }
+        
+        - (NSString*)sizeString {
+            return [NSString stringWithFormat:@"%lld bytes", _cachedSize];
+        }
+        
+        - (NSString*)bundlePath {
+            return _path;
+        }
+        
+        - (NSString*)registrationState {
+            return _cachedRegistrationState;
+        }
+        
+        - (UIImage*)iconForSize:(CGSize)size {
+            return _cachedPreviewIcon;
+        }
+        
+        - (NSAttributedString*)detailedInfoTitle {
+            return [[NSAttributedString alloc] initWithString:[self displayName] ?: @""];
+        }
+        
+        - (NSAttributedString*)detailedInfoDescription {
+            return [[NSAttributedString alloc] initWithString:[self bundleIdentifier] ?: @""];
+        }
+        
+        - (BOOL)isDebuggable {
+            return NO;
+        }
+        
+        - (void)log {
+            NSLog(@"TSAppInfo: %@", self);
+        }
+        
+        @end
+        EOF
+# 构建项目
+    - name: Build project
+      env:
+        THEOS: ${{ github.workspace }}/theos
+      run: |
+        export PATH=$THEOS/bin:$PATH
+        export THEOS_DEVICE_IP=127.0.0.1
+        export THEOS_PLATFORM=ios
+        
+        # 编译主程序
+        cd TrollStore
+        sed -i.bak 's/TrollStore_LIBRARIES = archive/TrollStore_LIBRARIES = /' Makefile
+        make package FINALPACKAGE=1
+        cd ..
+        
+        # 编译持续性助手
+        cd TrollHelper
+        make package FINALPACKAGE=1
+        cd ..
+        # 编译trollstorehelper
+        cd RootHelper
+        # 创建 include 目录并复制必要的头文件
+        mkdir -p include
+        cp ../ChOma/src/*.h include/
+        cp ../ChOma/src/*.c include/
+        
+        # 替换 unarchive.m 文件，使用 posix_spawn 代替 system
+        cat > unarchive.m << 'EOF'
+        #import <Foundation/Foundation.h>
+        #import <spawn.h>
+        #import <sys/wait.h>
+        
+        // 重命名函数为 extract 以匹配调用
+        int extract(const char* archive_path, const char* extract_path) {
+            @autoreleasepool {
+                NSString* archivePath = [NSString stringWithUTF8String:archive_path];
+                NSString* extractPath = [NSString stringWithUTF8String:extract_path];
+                
+                NSFileManager* fm = [NSFileManager defaultManager];
+                NSError* error = nil;
+                
+                // 创建目标目录
+                if (![fm createDirectoryAtPath:extractPath 
+                    withIntermediateDirectories:YES 
+                    attributes:nil 
+                    error:&error]) {
+                    NSLog(@"Failed to create directory: %@", error);
+                    return -1;
+                }
+                
+                // 检查文件是否存在
+                if (![fm fileExistsAtPath:archivePath]) {
+                    NSLog(@"Archive file does not exist");
+                    return -1;
+                }
+                
+                // 使用 posix_spawn 执行 tar 命令
+                pid_t pid;
+                const char* args[] = {
+                    "/usr/bin/tar",
+                    "-xf",
+                    [archivePath UTF8String],
+                    "-C",
+                    [extractPath UTF8String],
+                    NULL
+                };
+                
+                extern char** environ;
+                int status = posix_spawn(&pid, args[0], NULL, NULL, (char* const*)args, environ);
+                if (status != 0) {
+                    NSLog(@"posix_spawn failed: %s", strerror(status));
+                    return -1;
+                }
+                
+                // 等待子进程结束
+                if (waitpid(pid, &status, 0) != -1) {
+                    return WEXITSTATUS(status);
+                }
+                
+                return -1;
+            }
+        }
+        EOF
+        
+        # 修改类型定义，确保一致性
+        cat > include/FAT.h << 'EOF'
+        #pragma once
+        #include <stdio.h>
+        #include <stdint.h>
+        #include <mach/machine.h>
+        #include "MachO.h"
+        #include "DyldSharedCache.h"
+        #include "MemoryStream.h"
+        
+        struct FAT_header {
+            uint32_t magic;
+            uint32_t nfat_arch;
+        };
+        
+        struct FAT_arch {
+            cpu_type_t cputype;
+            cpu_subtype_t cpusubtype;
+            uint32_t offset;
+            uint32_t size;
+            uint32_t align;
+        };
+        
+        // 使用 DyldSharedCache.h 中的 Fat 定义
+        Fat* fat_init_from_path(const char* path);
+        Fat* fat_init_from_memory_stream(MemoryStream* stream);
+        MachO* fat_find_preferred_slice(Fat* fat);
+        MachO* fat_find_slice(Fat* fat, cpu_type_t cputype, cpu_subtype_t cpusubtype);
+        void fat_free(Fat* fat);
+        EOF
+        
+        # 修改 main.m 添加头文件引用和类型使用
+        sed -i.bak '1i\
+        #import "FAT.h"\
+        #import "MachO.h"\
+        #import "MemoryStream.h"\
+        ' main.m
+        
+        # 修改 main.m 中的类型使用
+        sed -i.bak 's/FAT \*fat/Fat \*fat/g' main.m
+        sed -i.bak 's/struct MachO \*macho/MachO \*macho/g' main.m
+        sed -i.bak 's/struct MachO \*machoForExtraction/MachO \*machoForExtraction/g' main.m
+        sed -i.bak 's/struct MemoryStream \*stream/MemoryStream \*stream/g' main.m
+        
+        # 修改 Makefile 添加源文件和包含路径
+        cat >> Makefile << 'EOF'
+        trollstorehelper_FILES += ../ChOma/src/FAT.c
+        trollstorehelper_FILES += ../ChOma/src/MachO.c
+        trollstorehelper_FILES += ../ChOma/src/MemoryStream.c
+        ADDITIONAL_CFLAGS += -I./include -I../ChOma/src -DTROLLSTORE_ROOT_HELPER=1
+        ADDITIONAL_OBJCFLAGS += -I./include -I../ChOma/src -DTROLLSTORE_ROOT_HELPER=1
+        trollstorehelper_FRAMEWORKS = Security Foundation CoreTelephony MobileCoreServices
+        EOF
+        
+        make package FINALPACKAGE=1
+        cd ..
+        
+        # 5. 组装最终文件
+        mkdir -p _build
+        # 复制 trollstorehelper
+        cp RootHelper/.theos/obj/trollstorehelper _build/
+        # 复制 TrollStore
+        cp -r TrollStore/.theos/obj/TrollStore.app _build/
+        # 复制 PersistenceHelper
+        cp TrollHelper/.theos/obj/TrollStorePersistenceHelper.app/TrollStorePersistenceHelper _build/
+    # 上传构建产物
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: TrollStore-Components
+        path: |
+          _build/trollstorehelper
+          _build/TrollStore.app
+          _build/TrollStorePersistenceHelper 
