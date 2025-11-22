@@ -58,7 +58,6 @@
 	];
 	urlComponents.queryItems = queryItems;  // 设置查询参数
 	
-	NSURL *finalURL = urlComponents.URL;  // 生成完整URL
 	NSURLSession *session = [NSURLSession sharedSession];  // 创建共享会话
 	
 	[TSPresentationDelegate startActivity:@"正在验证..."];  // 开始活动指示器
